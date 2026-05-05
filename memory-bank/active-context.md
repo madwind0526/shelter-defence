@@ -81,6 +81,268 @@ The current focus is project orientation and maintainability:
   - Shifted the right-side WEAPON/ITEMS content left by increasing right padding and reducing left padding, balancing the outer arrow spacing.
 - Latest Preparation horizontal balance follow-up:
   - Pulled the right-side WEAPON/ITEMS content further left by changing the loadout padding to `0 14% 0 1%`.
+- Latest main gameplay HUD/data-flow update:
+  - Connected Preparation loadout data to the gameplay HUD state.
+  - Starting a run now applies the first hired soldier's equipped weapon to the player weapon controller.
+  - Added gameplay weapon definitions for the preparation weapon IDs.
+  - Added a `WaveSnapshot` getter so the main HUD can show wave total/remaining progress.
+  - Rebuilt the main gameplay HUD toward the updated `main-screen.PNG` reference: hired soldier roster, assigned weapon images, item counts, score/gold/rubi, wave progress, barricade bar, special buttons, and turret panel.
+  - Registered `assets/images/stages/menu.png` as the main HUD top-control sprite.
+  - Current main HUD uses existing character/weapon/item images plus CSS-drawn special and turret icons because dedicated grenade/air-strike/turret image assets are not present.
+- Latest main gameplay HUD asset pass:
+  - Registered all available `assets/images/stages/` HUD assets: `waves`, `bullet`, `turret`, `barricade`, `magazine`, `menu`, `player`, potions, `repair-kit`, `grenade`, `air-attack`, and stage 1 background.
+  - Swapped the main gameplay HUD from CSS-drawn wave/barricade/special/turret placeholders to the provided stage image assets.
+  - Changed `imageAssets.stage1Background` to use `assets/images/stages/stage1-background.jpeg`.
+  - Main gameplay HUD typography now inherits the DS Digital font.
+- Latest main gameplay HUD reference alignment:
+  - Adjusted main HUD positions and dimensions against the user's updated reference image.
+  - Tuned the left soldier roster, wave panel, top controls, special buttons, crosshair, barricade, item bar, score block, and turret panel.
+  - Hue-shifted the provided `player.png` portrait frame so it reads as a red ring like the reference.
+- Latest main gameplay HUD ammo/special update:
+  - Made main soldier weapon image backgrounds fully transparent.
+  - Made main item icon backgrounds highly transparent.
+  - Changed main roster magazine count to `10 + purchased magazine count`.
+  - Changed main roster bullet count to `weapon magazineSize * magazine count`, so each assigned weapon displays a different bullet total.
+  - Adjusted the bullet icon to visibly use `assets/images/stages/bullet.png`.
+  - Added timed special counters: grenade gains 1 every 10 seconds and air strike gains 1 every 30 seconds during active play.
+- Latest main gameplay turret update:
+  - Added `TurretSnapshot` with installed/shield/maxShield.
+  - Initialized all four turret slots as uninstalled, so the main HUD now shows every turret slot empty by default.
+  - Main HUD now only renders a turret icon and shield bar when a slot is installed and shield is above 0; when shield reaches 0 it renders as an empty slot.
+- Latest main gameplay roster/currency polish:
+  - Widened and fixed the left main squad roster rows so every hired soldier row can show its assigned weapon.
+  - Enlarged assigned weapon images in each soldier row.
+  - Made bullet and magazine icon/count backgrounds transparent.
+  - Changed bullet and magazine numbers to white with shadow.
+  - Enlarged Score/Gold/Rubi labels and values about 2x and made labels/values the same font size.
+- Latest main gameplay item/empty-slot polish:
+  - Made the main item bar icon backgrounds transparent.
+  - Moved each main item count directly below its item image.
+  - Changed the main soldier roster to always render five player slots.
+  - Empty/non-hired player slots now remain visible as dim empty rows instead of disappearing.
+- Latest main gameplay HUD alignment and hotkey update:
+  - Moved the WAVE zombies-remaining text below the wave panel frame so it no longer overlaps the progress track.
+  - Widened the Score/Gold/Rubi value area to prevent label/value overlap.
+  - Enlarged and lowered the main item images, keeping item-count bottoms aligned with the Rubi line and turret panel bottom.
+  - Moved Grenade and Air Strike controls to the vertical middle of the right side.
+  - Added visible hotkeys and input handling: items use `1`-`4`, Grenade uses `Q`, Air Strike uses `A`, and top controls use `F1`/`F2`/`F3`.
+  - Added simple F-key control overlays for Menu, Settings, and Pause.
+- Latest main gameplay HUD health/menu update:
+  - Increased spacing between main item icons and enlarged the Repair Kit icon by about 20%.
+  - Increased spacing between Score/Gold/Rubi labels and values.
+  - Reworked player portraits so character photos render in front of the frame treatment.
+  - Converted the red portrait ring into a health indicator driven by current player health.
+  - Empty/non-hired player slots no longer show the red health ring, bullet count, or magazine count.
+  - Added Space as a pause hotkey.
+  - Reworked F1 Menu into Preparation, Exit, and Cheat Mode actions.
+  - Added Cheat Mode actions for Infinite Bullet, Power Shooting, No Reload, Jump to Stage, Rank placeholder, and GameOver.
+  - Gameplay now pauses update timers while in menu/pause overlays.
+- Latest barricade gameplay update:
+  - Added real barricade health state with `1500 / 1500 HP`.
+  - Connected the main HUD barricade bar and HP text to actual barricade health.
+  - Zombies now target and attack the barricade while barricade health is above 0.
+  - Zombies are prevented from crossing the barricade line while barricade health remains.
+  - Once barricade health reaches 0, zombies resume pathing toward and attacking the player.
+  - Repair Kit now restores barricade health by 350, capped at max health.
+- Latest barricade/repair-kit asset update:
+  - Pointed every barricade HUD asset path, including the legacy `hudAssets.barricadePanel`, to `assets/images/stages/barricade.png`.
+- Latest item asset filename restore:
+  - Restored `repair-kit.png` files under `assets/images/items/` and `assets/images/stages/` from the available `repair-kit1.png` assets.
+  - Changed Repair Kit URL references back to `repair-kit.png`.
+  - Confirmed item URLs now use the original names: `repair-kit.png`, `potion-health.png`, `potion-dex.png`, `potion-int.png`, `magazine.png`, and `jacket.png`.
+- Latest Preparation gold-label cleanup:
+  - Removed the trailing `G` from the top Preparation Gold total.
+  - Removed the trailing `G` from Soldier Hire prices.
+  - Removed the trailing `G` from ITEMS card prices so the digital font cannot confuse `G` with `6`.
+- Latest Preparation hire/fire and magazine update:
+  - Changed the Preparation Magazine item initial count from `000` to `010`.
+  - Item reset now restores Magazine to the base count of 10 while resetting the other item counts to 0.
+  - Main HUD now treats the Magazine item count as the total magazine count instead of adding another base 10.
+  - Hired soldiers can now be fired from the same button.
+  - Firing a soldier refunds half of that soldier's hire cost.
+  - Soldier weapon selections remain stored on each soldier even when hire/fire state changes.
+- Latest combat stat/loadout update:
+  - Added weapon-specific STR/DEX/INT scaling, base damage, fire rate, critical chance, reload/range/spread, and sound mapping to every Preparation weapon.
+  - Starting a run now derives the active weapon from the first hired soldier plus their equipped weapon.
+  - Additional hired soldiers now use their own derived Damage, Fire Rate, and Critical Chance as automatic support fire during active waves.
+  - Final STR/DEX/INT is calculated as soldier base stat multiplied by weapon stat scale.
+  - Final Health is derived from final STR; final Damage, Fire Rate, and Critical Chance are derived from the soldier/weapon combination.
+  - Weapon firing now rolls critical hits and applies doubled damage on a critical shot.
+  - The Preparation character stat display now shows final STR/DEX/INT instead of raw base stats.
+  - Hovering over the Preparation character opens a compact combat-data panel showing WEAPON, SOLDIER, and FINAL stat tables.
+- Latest Preparation economy/required-soldier update:
+  - Initial Gold is now 100,000.
+  - Anais remains the required first soldier and cannot be hired/fired from the Preparation UI.
+  - The Preparation state also guards Anais so she is forced back to hired if the hire/fire action is triggered programmatically.
+- Latest multi-soldier/turret gameplay update:
+  - Main gameplay now treats every hired soldier as an independent combatant with their own Health.
+  - The active manual weapon follows the first living hired soldier; if that soldier dies, it switches to the next living soldier.
+  - Non-active living soldiers fire automatically using their own derived Damage, Fire Rate, and Critical Chance.
+  - Soldiers with Health at 0 no longer attack, and GameOver occurs only when every hired soldier is dead.
+  - Added `assets/images/chars/turret1.png` and `turret2.png` as selectable Preparation turret assets.
+  - Preparation now has turret options and four turret slots; clicking a turret option installs it in the next empty slot, and clicking a slot removes it.
+  - Main HUD turret slots now show selected turret images and active shield bars.
+  - Installed gun/flame turrets attack independently, but remaining turrets do not prevent GameOver after all soldiers die.
+- Latest Preparation tooltip copy update:
+  - Renamed the weapon/final stat label `RATE` to `SPEED` in the Preparation soldier hover stat panel.
+- Latest Preparation turret/carousel update:
+  - Moved the soldier hover stat panel below the soldier carousel arrows so it no longer overlaps the left/right controls.
+  - Removed the separate Preparation turret selector panel from the lower-right side.
+  - Turrets are now part of the main SOLDIERS carousel: after the five soldiers, the arrows show `TURRET (GUN)` and `TURRET (FIRE)`.
+  - When a turret is selected, the weapon picker is disabled and shows that turrets use fixed weapons.
+  - Turrets now show STR/DEX/INT in the same lower stat area as soldiers.
+  - Turrets can be hired into one of four turret slots or fired for half refund from the same Preparation character area.
+- Latest turret stat tuning:
+  - Increased turret STR/DEX/INT values to be much larger than soldier stats.
+  - Increased turret DAMAGE values and connected those Preparation values to actual main-game turret attacks instead of hardcoded damage.
+- Latest Preparation turret limit/tooltip update:
+  - Changed turret hiring to use one shared four-slot limit across Gun Turret and Flame Turret instead of allowing four of each type.
+  - Updated the turret Hire button count to show total installed turrets out of four.
+  - Added a turret hover info panel in the soldier carousel with WEAPON and FINAL stat boxes and an intentionally empty SOLDIER box.
+  - Tightened the Preparation hover stat panel width, padding, and type scale so it no longer overlaps the right-side items area.
+- Latest weapon balance update:
+  - Rebalanced weapon STR/DEX/INT, magazine size, damage, speed, and critical values into cleaner five-step values.
+  - Raised machine-gun-family STR/DEX bonuses and damage above pistol/revolver values.
+  - Lowered DEX bonuses for pistol, revolver, shotgun, and MGL.
+  - Preserved sniper as a high-damage, high-critical weapon while rounding its visible values up to clean integers.
+  - Changed Preparation info-panel number formatting to display rounded-up integer values instead of decimals.
+- Latest soldier health/stat balance update:
+  - Rebalanced Soldier STR/DEX/INT values to five-step values.
+  - Lowered Soldier STR values so Health can land in the intended combat range.
+  - Changed derived Soldier Health to `ceil(final STR) * 10` in Preparation and main gameplay.
+  - Restored weapon magazine sizes to their original per-weapon values instead of forcing them to five-step values.
+- Latest main combat ammo/HUD update:
+  - Changed main roster bullet display to show only the current bullet count, not bullets multiplied by magazine count.
+  - Added per-soldier ammo, magazine reserve, reload timer, and fire cooldown state.
+  - Mouse firing now makes every living hired soldier fire along the current aim line according to their own weapon speed, ammo, reload, and sound.
+  - A soldier with 0 bullets automatically reloads by consuming one magazine; if both bullets and magazines are 0, that soldier cannot fire.
+  - Zombie kills now award random Score and Gold, and direct weapon kills show a floating Gold popup over the kill location.
+  - Tightened Score/Gold/Rubi label-value spacing, adjusted the wave progress track, changed soldier portraits to a donut-style Health ring, and removed the red filled box from installed turret slots.
+- Latest main screen asset placement update:
+  - Replaced the top-right main menu sprite usage with separate `menu1.png`, `menu2.png`, and `menu3.png` images for better alignment.
+  - Registered and used `barricade-block.png` for the foreground barricade presentation.
+  - Replaced the simple Three.js barricade box with a textured barricade-block plane.
+  - Added a main-field defense overlay where installed turrets render behind the barricade-block image.
+  - Registered and used `turret1-on/off.png` and `turret2-on/off.png` for installed turret visuals and turret panel slots.
+- Latest Wave Clear upgrade UI update:
+  - Added upgrade-specific asset references for `medic.png`, `repair-kit1.png`, `magazine1.png`, `fast.png`, `bullets.png`, and `explosion.png`.
+  - Remapped Field Kit, Reinforced Nest, Extended Mag, Fast Hands, Light Trigger, and Hot Rounds to the matching new icons.
+  - Reworked the upgrade card markup and CSS so each card has a clear icon block, title, and readable effect text.
+- Latest main HUD cleanup:
+  - Removed the extra Three.js barricade-block plane so only the HUD foreground barricade image remains visible.
+  - Changed soldier portrait images to preserve aspect ratio and changed the donut Health ring from blue to red below 20% health.
+  - Moved F1/F2/F3 labels above the menu images and hid duplicate text labels because `menu1/2/3.png` already include their own text.
+  - Added F4/F5 hotkeys for Grenade and Air Strike, with unavailable specials shown in grayscale until their counts are above zero.
+  - Kept turret panel slots on the generic `turret.png` icon while the main field uses the turret on/off images.
+  - Aligned Score/Gold/Rubi value columns to the Score value start position.
+- Latest main HUD/gameplay follow-up:
+  - Enlarged/cropped full-body soldier PNGs inside the circular portrait slots so the character profile is visible without stretching.
+  - Prevented UI clicks and pointer-lock exits from leaving squad shooting active; firing now only starts while pointer lock is active.
+  - Added a small initial firing stagger for hired soldiers to avoid a stacked first-frame volley when several soldiers are hired.
+  - Retuned the wave progress fill box and moved/shrank the foreground barricade-block overlay so it sits closer to the battlefield instead of the bottom item area.
+  - Mapped every preparation weapon to the new matching sound files under `assets/sounds/`, and added turret firing sounds.
+- Latest first-person weapon view update:
+  - Registered the new first-person weapon images from `assets/images/chars/`: `pisto.png`, `revolver.png`, `mp5k.png`, `carbine.png`, `machine gun.png`, `rifle.png`, `shotgun.png`, and `mgl.png`.
+  - Replaced the temporary box-based Three.js weapon model in `WeaponView.ts` with a textured transparent plane.
+  - The first-person weapon image now follows the currently active hired soldier's equipped weapon.
+- Latest firing sound behavior update:
+  - Added a mouse-release event path to `Input`.
+  - When the player releases the mouse button, the currently playing soldier weapon shot sounds are stopped immediately.
+  - Special effect sounds such as grenade, air strike, and reload are left untouched.
+- Latest first-person weapon alignment update:
+  - Flipped the first-person weapon images horizontally so the muzzle points toward the center aim marker.
+  - Added per-weapon muzzle anchor metadata in `WeaponView.ts`.
+  - The weapon plane is now positioned from the muzzle anchor instead of a single fixed bottom-right offset.
+- Latest world visibility update:
+  - Removed the procedural box buildings, debris, and bunker posts from the main 3D scene.
+  - Made the floor and road visual planes transparent so the stage background art remains visible.
+  - Kept a faint transparent road and center stripe guide so the play lane still reads without covering the background.
+- Latest general weapon alignment update:
+  - Replaced manual per-weapon first-person muzzle offsets with a general alpha-scan alignment pass.
+  - `WeaponView` now estimates each weapon PNG's visible bounds and muzzle anchor from the transparent image data.
+  - Hired soldiers' equipped first-person weapon textures are preloaded/aligned when a run starts, so Prep changes and multi-soldier weapon swaps use the same alignment path.
+- Latest main screen coverage/profile/hotkey update:
+  - Changed the stage background from a perspective 3D plane to `scene.background`, so the background fills the full canvas instead of only the center.
+  - Re-cropped main soldier portrait images inside the health donut to bring the character face/profile forward and brighten it.
+  - Unified the font size for item hotkeys `1`-`4` and special/top hotkeys `F1`-`F5` with a shared CSS variable.
+- Latest main view alignment follow-up:
+  - Fixed `WeaponView.setWeapons()` so duplicate weapon IDs are no longer collapsed; three hired soldiers with the same weapon now render three first-person weapon slots.
+  - Main gameplay now refreshes the visible first-person weapon set from every living soldier while keeping only the active soldier slot emphasized, even when multiple soldiers use the same weapon.
+  - Active first-person weapon muzzle alignment now stays locked to the aim anchor; only non-active support weapon slots receive side offsets.
+  - Removed the remaining visual opacity from the procedural floor/road/stripe planes so the stage background road is the only visible road layer.
+  - Hid the HUD foreground `barricade-block.png` overlay because barricade blocking is already represented by transparent gameplay collision.
+  - Re-layered the main roster portrait image inside the health donut so the character art sits above the inner dark circle.
+- Latest fixed-map aiming update:
+  - Mouse movement no longer rotates the player camera during main gameplay, preventing the Three.js map layer from sliding over the static stage background.
+  - Added a bounded normalized aim position that drives the main crosshair HUD, weapon muzzle placement, and weapon raycast direction.
+  - The active first-person weapon now follows the moving aim point while the background and map remain visually locked together.
+- Latest main HUD debug/layout adjustment:
+  - Reduced all first-person weapon image sizes to half scale so multiple hired-soldier weapons no longer dominate or heavily overlap the center screen.
+  - Moved the barricade HP panel to the lower-left area above Score/Gold/Rubi so it no longer overlaps the first-person weapon.
+  - Removed the wave image/progress presentation from the main HUD and replaced it with digital text: `WAVES (wave/total)` plus `remaining/total Zombies are remaining`.
+  - Restored the procedural floor, road, and center stripe debug visuals to 50% opacity.
+  - Restored the HUD barricade-block overlay at 50% opacity for debug visibility; separate procedural building meshes are not currently present after the previous cleanup.
+- Latest main gameplay lane/aim/HUD adjustment:
+  - Moved each soldier row's bullet and magazine image/count group to align with the left edge of that soldier's weapon image.
+  - Raised bullet and magazine indicators above the weapon image layer via z-index so weapon art no longer washes them out.
+  - Expanded the fixed-map aim clamp so the crosshair can move close to the screen edges.
+  - Restricted zombie spawn and movement X bounds to the central road lane (`-10..10`) so zombies no longer travel far beyond the intended play road.
+  - Moved the barricade gameplay target farther away from the player by changing the barricade stop/attack line from `z=3.45` to `z=-4.5`.
+- Latest main HUD readability pass:
+  - Confirmed the soldier bullet indicator uses `assets/images/stages/bullet.png`.
+  - Changed the soldier bullet icon from stretched/inverted sprite treatment to original-image `contain` rendering.
+  - Matched the soldier magazine indicator size to the bullet indicator and tightened magazine icon/count spacing.
+  - Increased bullet icon/count spacing so the number no longer sticks to the bullet image.
+  - Offset first-person weapon muzzle placement away from the crosshair while keeping shot raycasts tied to the crosshair.
+  - Removed the barricade panel background image; the HUD now shows `BARRICADE`, HP text, and the health bar only.
+  - Doubled the shared hotkey font size for item hotkeys `1`-`4`, top controls `F1`-`F3`, and specials `F4`/`F5`.
+  - Moved the top-right main menu controls down/right by doubling their top/right spacing.
+  - Pulled main item count text closer to its item image.
+- Latest barricade health bar style update:
+  - Restyled the barricade HP bar to match the user's reference: square black track, dark blue border, and solid red fill.
+  - Kept the existing `BARRICADE` label and numeric HP text.
+- Latest main HUD annotated-adjustment pass:
+  - Reworked soldier roster bullet/magazine indicators into dark translucent paired boxes so each icon and count stays grouped above the weapon art.
+  - Increased the main wave text and zombies-remaining text size for readability.
+  - Shifted and spaced the top-right menu/settings/pause icons farther from the edges while keeping F1/F2/F3 centered above them.
+  - Hid the debug foreground barricade image and kept the barricade HUD as text plus a single red HP bar.
+  - Added a stage-start view reset so the fixed 3D map/lane pitch is re-aligned when a run starts or a new wave resumes after upgrade selection.
+- Latest first-person squad weapon formation update:
+  - Tightened the soldier roster bullet/magazine group spacing and moved the F1/F2/F3 labels farther above their menu images.
+  - Changed first-person weapon layout to a five-soldier formation: soldiers 1/3/5 use the PNG direction as-is, while soldiers 2/4 are horizontally flipped.
+  - Spaced soldier weapon muzzle targets around the crosshair so the gap between soldiers 1 and 2 leaves room for the aim marker.
+  - Updated the automatic muzzle anchor scan to use the original PNG's left-side muzzle before applying per-slot flip.
+- Latest sound/status follow-up:
+  - Wave clear, pause/menu, and GameOver now stop currently playing soldier weapon sounds immediately.
+  - Short mouse clicks are captured with a one-shot request flag, so a click can still fire even if press/release happens between frames.
+  - Mouse release now allows a tiny minimum weapon-shot playback window before stopping the sound, so short clicks still make an audible shot.
+  - Reduced vertical spacing between main Soldier Status rows by about half.
+- Latest stage/wave rules update:
+  - Rebuilt wave progression into stages with five waves per stage.
+  - Wave zombie counts are now 20, 40, 60, 80 plus one mid boss, and 100 plus two early mid bosses and one big boss.
+  - Normal zombie base health starts at 100 and increases by 1.5x per stage.
+  - Mid bosses use 5x health/damage and 2x size; big bosses use 10x health/damage and 3x size.
+  - Wave clear now grants +10 Magazine plus random Gold/Rubi rewards and then opens the temporary upgrade selection for waves 1-4.
+  - Stage clear after wave 5 grants the larger stage bonus, resets stage-scoped upgrades, and starts the next stage with the matching `stage?-background.jpeg`.
+  - Upgrade card icon/text layout is now center-aligned inside each card.
+- Latest main combat feedback update:
+  - Compressed the main Soldier Status roster rows so profile vertical spacing is much tighter.
+  - Pulled the soldier bullet and magazine HUD boxes closer together.
+  - Lowered the default crosshair position and shifted the first-person weapon formation closer to center.
+  - Changed zombie kill gold popups to show only the numeric reward.
+  - Added zombie overhead HP bars projected from the 3D enemy positions.
+  - Added floating red damage numbers and pink critical-damage numbers for direct weapon hits.
+- Latest menu/cheat/gameover update:
+  - Reworked the F1 MENU panel into a centered digital-font 2x2 grid: STORE, CHEAT, RESUME, EXIT.
+  - STORE opens the Preparation screen, CHEAT opens Cheat Mode, and EXIT returns to the intro screen.
+  - Reworked Cheat Mode with centered digital typography, removed the Go to GameOver action, and kept Rank access.
+  - Main HUD now shows a small 2x2 cheat indicator below the F1/F2/F3 icons for Bullet, Power, Reload, and Jump, with active cheats in white and inactive entries in gray.
+  - Infinite Bullet now displays the soldier bullet count as an infinity symbol.
+  - GameOver now uses `assets/images/GameOver.png`; clicking proceeds to name entry when the score qualifies for Top 10, then shows `assets/images/TopRanks.png` plus digital Name/Score/Stage rows.
+  - Stage transition now restores barricade Health to 100%.
+  - Wave Clear and Stage Clear panels now use digital-font, centered text and omit the small eyebrow labels.
+  - Lowered the default crosshair further.
+  - Mid boss and big boss health/damage multipliers were increased by 10x from the previous values.
 
 ## Important Current State
 
@@ -94,7 +356,7 @@ The current focus is project orientation and maintainability:
 - Generated output and dependencies live under `dist/` and `node_modules/`; avoid editing them directly.
 - `code_review.json` was removed by the user and should not be referenced as a current project file.
 - There is no Docker setup in the repository.
-- This folder is not currently detected as a git repository in the active workspace.
+- This folder is a git repository. The initial project snapshot was committed as `20aab23`.
 
 ## Verification Notes
 
@@ -121,7 +383,50 @@ The current focus is project orientation and maintainability:
 - `npm run build` succeeded after the latest Preparation alignment/reset-image pass; Vite still reports the same chunk-size warning.
 - `npm run build` succeeded after reducing the Reset image size and re-centering the right loadout content; Vite still reports the same chunk-size warning.
 - `npm run build` succeeded after pulling the right loadout content further left; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after wiring preparation loadout into gameplay and rebuilding the main HUD; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after wiring `assets/images/stages/menu.png` into the main HUD top controls; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after converting the main gameplay HUD to use the provided `assets/images/stages/` assets; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the main HUD reference-alignment pass; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the main HUD ammo/magazine/special-counter update; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after changing turret slots to empty-by-default with shield-aware rendering; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the main roster/currency/ammo visual polish; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after making main item icons transparent and keeping all five player slots visible; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the latest main HUD alignment and hotkey update; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the latest portrait health ring, menu, pause, and cheat-mode update; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding barricade-blocking zombie behavior and real barricade HUD health; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after aligning barricade and Repair Kit asset paths; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after restoring the original item asset filenames; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after removing `G` suffixes from Preparation Gold displays; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding Preparation fire/refund behavior and base Magazine count 10; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding weapon stat scaling, derived combat stats, support soldier fire, critical hits, and the Preparation character hover stat panel; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after locking Anais as the required soldier and changing initial Gold to 100,000; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding independent soldier Health, soldier death GameOver logic, Preparation turret selection, and turret attacks; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after changing the Preparation stat-panel `RATE` label to `SPEED`; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after moving turrets into the SOLDIERS carousel, disabling weapon selection for turrets, and moving the hover stat panel below the arrows; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after increasing turret STR/DEX/INT/DAMAGE and wiring turret DAMAGE into gameplay attacks; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after enforcing the shared four-turret limit and tightening the Preparation hover info panel; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after rebalancing weapon values and removing decimal display from Preparation stat panels; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after rebalancing Soldier stats, changing Health to STR x 10, and restoring original weapon magazine sizes; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding per-soldier ammo/reload firing, random kill rewards, floating Gold popups, and the latest main HUD polish; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after wiring menu1/menu2/menu3, barricade-block, and turret on/off assets into the main screen; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after remapping Wave Clear upgrade icons and improving upgrade card readability; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the latest barricade, soldier portrait, top menu, special hotkey, turret panel, and score alignment fixes; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after fixing soldier profile visibility, pointer-lock shooting, wave/barricade alignment, and new weapon sound mappings; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after replacing the temporary first-person weapon box model with the new weapon images; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding mouse-release weapon sound cutoff behavior; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after aligning first-person weapon muzzles toward the aim marker; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after removing box scenery and making the road/floor transparent; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after generalizing first-person weapon muzzle alignment for all equipped soldier weapons; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after making the main background full-canvas, restoring soldier portrait visibility, and unifying hotkey font sizes; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after fixing duplicate first-person weapon rendering, hiding the extra barricade overlay, making procedural road visuals fully transparent, and relayering soldier portraits; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after changing mouse movement from camera rotation to fixed-map aim/crosshair movement; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after reducing first-person weapon scale, moving the barricade HP panel, replacing the wave image with text, and restoring debug opacity for road/floor/stripe/barricade visuals; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after aligning soldier ammo/mag indicators, widening aim movement, narrowing zombie lane bounds, and moving the barricade target farther from the player; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the main HUD readability pass for bullet/magazine indicators, barricade text bar, larger hotkeys, menu spacing, item-count spacing, and weapon/crosshair separation; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after changing the barricade HP bar to the requested black/blue/red rectangular style; Vite still reports the same chunk-size warning.
 - A Vite dev server is responding at `http://127.0.0.1:5173/`.
+- `npm run build` succeeded after adding zombie health bars, damage/critical popups, and the latest HUD spacing/aim/weapon-position adjustments; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the menu, cheat indicator, GameOver ranking, stage-reset, crosshair, and boss multiplier changes; Vite still reports the same chunk-size warning.
 
 ## Next Agent Startup Checklist
 

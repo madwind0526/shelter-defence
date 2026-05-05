@@ -22,6 +22,7 @@ const starterWeapon: WeaponDefinition = {
   reloadTime: 1.15,
   range: 45,
   spread: 0.012,
+  criticalChance: 0.05,
   soundId: 'pistol'
 };
 
@@ -35,6 +36,10 @@ export type FireResult = 'none' | 'miss' | 'hit' | 'killed';
 export interface FireOutcome {
   result: FireResult;
   reloadStarted: boolean;
+  hitEnemyId?: number;
+  hitPoint?: Vector3;
+  damageAmount?: number;
+  critical?: boolean;
 }
 
 export class WeaponController {
@@ -44,6 +49,9 @@ export class WeaponController {
   damageMultiplier = 1;
   fireRateMultiplier = 1;
   reloadMultiplier = 1;
+  infiniteAmmo = false;
+  powerShot = false;
+  noReload = false;
 
   private cooldown = 0;
   private reloadTimer = 0;
@@ -87,9 +95,17 @@ export class WeaponController {
     return true;
   }
 
-  tryFire(camera: PerspectiveCamera, enemies: EnemyManager): FireOutcome {
+  tryFire(
+    camera: PerspectiveCamera,
+    enemies: EnemyManager,
+    aim = this.center
+  ): FireOutcome {
     if (this.reloadTimer > 0 || this.cooldown > 0) {
       return { result: 'none', reloadStarted: false };
+    }
+
+    if (this.ammo <= 0 && (this.infiniteAmmo || this.noReload)) {
+      this.ammo = this.definition.magazineSize;
     }
 
     if (this.ammo <= 0) {
@@ -99,17 +115,50 @@ export class WeaponController {
       };
     }
 
-    this.ammo -= 1;
+    if (!this.infiniteAmmo) {
+      this.ammo -= 1;
+    }
     this.cooldown = 1 / (this.definition.fireRate * this.fireRateMultiplier);
-    const shouldAutoReload = this.ammo <= 0;
+    const shouldAutoReload = this.ammo <= 0 && !this.noReload;
 
-    this.raycaster.setFromCamera(this.center, camera);
+    const shot = this.fireDefinition(
+      camera,
+      enemies,
+      this.definition,
+      this.damageMultiplier,
+      this.powerShot,
+      aim
+    );
+
+    if (this.noReload && this.ammo <= 0) {
+      this.ammo = this.definition.magazineSize;
+    }
+
+    if (shouldAutoReload) {
+      return {
+        ...shot,
+        reloadStarted: this.tryReload()
+      };
+    }
+
+    return { ...shot, reloadStarted: false };
+  }
+
+  fireDefinition(
+    camera: PerspectiveCamera,
+    enemies: EnemyManager,
+    definition: WeaponDefinition,
+    damageMultiplier = 1,
+    powerShot = false,
+    aim = this.center
+  ): FireOutcome {
+    this.raycaster.setFromCamera(aim, camera);
     this.raycaster.ray.direction.x +=
-      (Math.random() - 0.5) * this.definition.spread;
+      (Math.random() - 0.5) * definition.spread;
     this.raycaster.ray.direction.y +=
-      (Math.random() - 0.5) * this.definition.spread;
+      (Math.random() - 0.5) * definition.spread;
     this.raycaster.ray.direction.normalize();
-    this.raycaster.far = this.definition.range;
+    this.raycaster.far = definition.range;
 
     const hit = enemies.raycast(this.raycaster);
     const start = camera.position.clone();
@@ -120,27 +169,31 @@ export class WeaponController {
           .add(
             this.raycaster.ray.direction
               .clone()
-              .multiplyScalar(this.definition.range)
+              .multiplyScalar(definition.range)
           );
 
     let result: FireResult = hit ? 'hit' : 'miss';
+    let damageAmount = 0;
+    let critical = false;
     if (hit) {
-      result = enemies.damage(
-        hit.enemyId,
-        this.definition.damage * this.damageMultiplier
-      );
+      critical = Math.random() < definition.criticalChance;
+      const criticalMultiplier = critical ? 2 : 1;
+      damageAmount = powerShot
+        ? 999999
+        : definition.damage * damageMultiplier * criticalMultiplier;
+      result = enemies.damage(hit.enemyId, damageAmount);
     }
 
     this.addTrail(start, end, hit ? '#fffb9a' : '#70f0ff');
 
-    if (shouldAutoReload) {
-      return {
-        result,
-        reloadStarted: this.tryReload()
-      };
-    }
-
-    return { result, reloadStarted: false };
+    return {
+      result,
+      reloadStarted: false,
+      hitEnemyId: hit?.enemyId,
+      hitPoint: hit?.point,
+      damageAmount: hit ? damageAmount : undefined,
+      critical: hit ? critical : undefined
+    };
   }
 
   isReloading(): boolean {
@@ -152,9 +205,22 @@ export class WeaponController {
     return 1 - this.reloadTimer / (this.definition.reloadTime * this.reloadMultiplier);
   }
 
+  setDefinition(definition: WeaponDefinition): void {
+    this.definition = { ...definition };
+    this.ammo = this.definition.magazineSize;
+    this.cooldown = 0;
+    this.reloadTimer = 0;
+  }
+
   increaseMagazine(amount: number): void {
     this.definition.magazineSize += amount;
     this.ammo = this.definition.magazineSize;
+  }
+
+  resetStageModifiers(): void {
+    this.damageMultiplier = 1;
+    this.fireRateMultiplier = 1;
+    this.reloadMultiplier = 1;
   }
 
   private addTrail(start: Vector3, end: Vector3, color: string): void {

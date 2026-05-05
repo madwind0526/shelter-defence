@@ -43,6 +43,13 @@ export class Player {
     this.camera.quaternion.setFromEuler(this.euler);
   }
 
+  resetView(pitch = 0): void {
+    this.yaw = 0;
+    this.pitch = MathUtils.clamp(pitch, -1.25, 1.2);
+    this.euler.set(this.pitch, this.yaw, 0);
+    this.camera.quaternion.setFromEuler(this.euler);
+  }
+
   damage(amount: number): void {
     this.health = Math.max(0, this.health - amount * this.incomingDamageMultiplier);
   }

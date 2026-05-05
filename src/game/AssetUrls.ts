@@ -1,5 +1,17 @@
 export const imageAssets = {
-  stage1Background: new URL('../../assets/images/Stage1-bg.jpeg', import.meta.url)
+  stage1Background: new URL('../../assets/images/stages/stage1-background.jpeg', import.meta.url)
+    .href,
+  stageBackgrounds: [
+    new URL('../../assets/images/stages/stage1-background.jpeg', import.meta.url).href,
+    new URL('../../assets/images/stages/stage2-background.jpeg', import.meta.url).href,
+    new URL('../../assets/images/stages/stage3-background.jpeg', import.meta.url).href,
+    new URL('../../assets/images/stages/stage4-background.jpeg', import.meta.url).href,
+    new URL('../../assets/images/stages/stage5-background.jpeg', import.meta.url).href,
+    new URL('../../assets/images/stages/stage6-background.jpeg', import.meta.url).href
+  ],
+  gameOver: new URL('../../assets/images/GameOver.png', import.meta.url).href,
+  topRanks: new URL('../../assets/images/TopRanks.png', import.meta.url).href,
+  barricadeBlock: new URL('../../assets/images/stages/barricade-block.png', import.meta.url)
     .href,
   weaponSheet: new URL('../../assets/images/Weapon_item_sheet.jpeg', import.meta.url)
     .href,
@@ -26,6 +38,38 @@ export const preparationUiAssets = {
   reset: new URL('../../assets/images/reset.png', import.meta.url).href
 };
 
+export const mainHudAssets = {
+  airAttack: new URL('../../assets/images/stages/air-attack.png', import.meta.url).href,
+  barricade: new URL('../../assets/images/stages/barricade.png', import.meta.url).href,
+  barricadeBlock: new URL('../../assets/images/stages/barricade-block.png', import.meta.url).href,
+  bullet: new URL('../../assets/images/stages/bullet.png', import.meta.url).href,
+  menu: new URL('../../assets/images/stages/menu1.png', import.meta.url).href,
+  settings: new URL('../../assets/images/stages/menu2.png', import.meta.url).href,
+  pause: new URL('../../assets/images/stages/menu3.png', import.meta.url).href,
+  grenade: new URL('../../assets/images/stages/grenade.png', import.meta.url).href,
+  magazine: new URL('../../assets/images/stages/magazine.png', import.meta.url).href,
+  player: new URL('../../assets/images/stages/player.png', import.meta.url).href,
+  potionDex: new URL('../../assets/images/stages/potion-dex.png', import.meta.url).href,
+  potionHealth: new URL('../../assets/images/stages/potion-health.png', import.meta.url).href,
+  potionInt: new URL('../../assets/images/stages/potion-int.png', import.meta.url).href,
+  repairKit: new URL('../../assets/images/stages/repair-kit.png', import.meta.url).href,
+  turret: new URL('../../assets/images/stages/turret.png', import.meta.url).href,
+  turret1Off: new URL('../../assets/images/stages/turret1-off.png', import.meta.url).href,
+  turret1On: new URL('../../assets/images/stages/turret1-on.png', import.meta.url).href,
+  turret2Off: new URL('../../assets/images/stages/turret2-off.png', import.meta.url).href,
+  turret2On: new URL('../../assets/images/stages/turret2-on.png', import.meta.url).href,
+  waves: new URL('../../assets/images/stages/waves.png', import.meta.url).href
+};
+
+export const upgradeAssets = {
+  fieldKit: new URL('../../assets/images/stages/medic.png', import.meta.url).href,
+  reinforcedNest: new URL('../../assets/images/stages/repair-kit1.png', import.meta.url).href,
+  extendedMag: new URL('../../assets/images/stages/magazine1.png', import.meta.url).href,
+  fastHands: new URL('../../assets/images/stages/fast.png', import.meta.url).href,
+  lightTrigger: new URL('../../assets/images/stages/bullets.png', import.meta.url).href,
+  hotRounds: new URL('../../assets/images/stages/explosion.png', import.meta.url).href
+};
+
 export const introAssets = {
   background: new URL(
     '../../assets/images/Intro/intro-background.jpeg',
@@ -46,7 +90,20 @@ export const characterAssets = {
   henry: new URL('../../assets/images/chars/henry.png', import.meta.url).href,
   kim: new URL('../../assets/images/chars/kim.png', import.meta.url).href,
   kino: new URL('../../assets/images/chars/kino.png', import.meta.url).href,
-  tomas: new URL('../../assets/images/chars/tomas.png', import.meta.url).href
+  tomas: new URL('../../assets/images/chars/tomas.png', import.meta.url).href,
+  turret1: new URL('../../assets/images/chars/turret1.png', import.meta.url).href,
+  turret2: new URL('../../assets/images/chars/turret2.png', import.meta.url).href
+};
+
+export const firstPersonWeaponAssets: Record<string, string> = {
+  'ai-aw-sniper': new URL('../../assets/images/chars/rifle.png', import.meta.url).href,
+  'bren-lmg': new URL('../../assets/images/chars/machine gun.png', import.meta.url).href,
+  'colt-m1911': new URL('../../assets/images/chars/pisto.png', import.meta.url).href,
+  'colt-saa': new URL('../../assets/images/chars/revolver.png', import.meta.url).href,
+  'm4-carbine': new URL('../../assets/images/chars/carbine.png', import.meta.url).href,
+  'milkor-mgl': new URL('../../assets/images/chars/mgl.png', import.meta.url).href,
+  mp5k: new URL('../../assets/images/chars/mp5k.png', import.meta.url).href,
+  shotgun: new URL('../../assets/images/chars/shotgun.png', import.meta.url).href
 };
 
 export const itemAssets = {
@@ -95,7 +152,7 @@ export const hudAssets = {
     import.meta.url
   ).href,
   barricadePanel: new URL(
-    '../../assets/images/hud/barricade-panel.png',
+    '../../assets/images/stages/barricade.png',
     import.meta.url
   ).href,
   helperHealthPanel: new URL(

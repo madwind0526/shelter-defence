@@ -3,15 +3,20 @@ import { WeaponSoundId } from './types';
 type EffectSoundId = 'reload';
 
 const soundAssets: Record<WeaponSoundId, string> = {
-  pistol: new URL('../../assets/sounds/pistol-shot.mp3', import.meta.url).href,
+  pistol: new URL('../../assets/sounds/pistol.mp3', import.meta.url).href,
+  revolver: new URL('../../assets/sounds/revolver.mp3', import.meta.url).href,
   ak47: new URL('../../assets/sounds/ak-47.mp3', import.meta.url).href,
-  m16: new URL('../../assets/sounds/m16.mp3', import.meta.url).href,
-  machineGun: new URL('../../assets/sounds/machine-gun.mp3', import.meta.url)
+  m4Carbine: new URL('../../assets/sounds/m4 carbine.mp3', import.meta.url)
+    .href,
+  mp5k: new URL('../../assets/sounds/mp5k.mp3', import.meta.url).href,
+  rifle: new URL('../../assets/sounds/rifle.mp3', import.meta.url).href,
+  mgl: new URL('../../assets/sounds/mgl.mp3', import.meta.url).href,
+  machineGun: new URL('../../assets/sounds/machine gun.mp3', import.meta.url)
     .href,
   shotgun: new URL('../../assets/sounds/shotgun.mp3', import.meta.url).href,
   laserGun: new URL('../../assets/sounds/laser-gun.mp3', import.meta.url).href,
-  plasmaGun: new URL('../../assets/sounds/Plasma-Gun.mp3', import.meta.url)
-    .href,
+  turret1: new URL('../../assets/sounds/turret1.mp3', import.meta.url).href,
+  turret2: new URL('../../assets/sounds/turret2.mp3', import.meta.url).href,
   explosion: new URL('../../assets/sounds/explosion.mp3', import.meta.url).href,
   fallingBomb: new URL('../../assets/sounds/falling-bomb.mp3', import.meta.url)
     .href
@@ -23,12 +28,17 @@ const effectAssets: Record<EffectSoundId, string> = {
 
 const soundVolumes: Record<WeaponSoundId, number> = {
   pistol: 0.42,
+  revolver: 0.44,
   ak47: 0.36,
-  m16: 0.34,
+  m4Carbine: 0.34,
+  mp5k: 0.31,
+  rifle: 0.42,
+  mgl: 0.45,
   machineGun: 0.28,
   shotgun: 0.46,
   laserGun: 0.32,
-  plasmaGun: 0.34,
+  turret1: 0.27,
+  turret2: 0.3,
   explosion: 0.42,
   fallingBomb: 0.36
 };
@@ -40,7 +50,7 @@ export class AudioManager {
 
   constructor() {
     for (const id of Object.keys(soundAssets) as WeaponSoundId[]) {
-      this.preload(id, id === 'machineGun' ? 8 : 4);
+      this.preload(id, ['machineGun', 'mp5k', 'turret1', 'turret2'].includes(id) ? 8 : 4);
     }
     this.preloadEffect('reload', 3, 0.34);
   }
@@ -51,6 +61,23 @@ export class AudioManager {
 
   playWeaponShot(id: WeaponSoundId): void {
     this.play(id, 0.94 + Math.random() * 0.1);
+  }
+
+  stopWeaponShots(ids: WeaponSoundId[], minimumPlaybackMs = 0): void {
+    for (const id of new Set(ids)) {
+      const pool = this.sounds.get(id);
+      if (!pool) continue;
+
+      for (const audio of pool) {
+        if (audio.paused) continue;
+        const remainingMs = minimumPlaybackMs - audio.currentTime * 1000;
+        if (remainingMs > 0) {
+          window.setTimeout(() => this.stopAudio(audio, id), remainingMs);
+          continue;
+        }
+        this.stopAudio(audio, id);
+      }
+    }
   }
 
   playReload(): void {
@@ -88,10 +115,18 @@ export class AudioManager {
     const audio = pool.find((candidate) => candidate.paused) ?? pool[0];
     audio.pause();
     audio.currentTime = 0;
+    audio.volume = soundVolumes[id];
     audio.playbackRate = playbackRate;
     void audio.play().catch(() => {
       this.unlocked = false;
     });
+  }
+
+  private stopAudio(audio: HTMLAudioElement, id: WeaponSoundId): void {
+    if (audio.paused) return;
+    audio.pause();
+    audio.currentTime = 0;
+    audio.volume = soundVolumes[id];
   }
 
   private playEffect(id: EffectSoundId, playbackRate = 1): void {

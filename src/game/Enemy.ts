@@ -5,20 +5,20 @@ import {
   MathUtils,
   Mesh,
   MeshStandardMaterial,
+  PerspectiveCamera,
   Raycaster,
   Scene,
   SphereGeometry,
   Vector3
 } from 'three';
-import { Player } from './Player';
 import { EnemyDefinition, EnemySnapshot } from './types';
 
 const walkerDefinition: EnemyDefinition = {
   id: 'walker',
   name: 'Walker',
-  maxHealth: 65,
+  maxHealth: 100,
   speed: 2.6,
-  damage: 9,
+  damage: 10,
   attackRange: 1.55,
   attackCooldown: 0.85,
   score: 10,
@@ -39,6 +39,7 @@ interface Enemy {
     rightLeg: Mesh;
   };
   health: number;
+  baseScale: number;
   attackTimer: number;
   age: number;
   hitTimer: number;
@@ -46,12 +47,39 @@ interface Enemy {
   state: 'chasing' | 'attacking' | 'hit' | 'dead';
 }
 
+export interface EnemySpawnOptions {
+  baseHealth: number;
+  wave: number;
+  healthMultiplier?: number;
+  damageMultiplier?: number;
+  sizeMultiplier?: number;
+}
+
 export interface EnemyHit {
   enemyId: number;
   point: Vector3;
 }
 
+export interface EnemyHealthBar {
+  id: number;
+  x: number;
+  y: number;
+  healthPercent: number;
+}
+
 export type EnemyDamageResult = 'none' | 'hit' | 'killed';
+
+export interface EnemyBarricadeTarget {
+  health: number;
+  z: number;
+  halfWidth: number;
+  damage: (amount: number) => void;
+}
+
+export interface EnemyAttackTarget {
+  position: Vector3;
+  damage: (amount: number) => void;
+}
 
 export class EnemyManager {
   private readonly enemies = new Map<number, Enemy>();
@@ -65,12 +93,16 @@ export class EnemyManager {
 
   constructor(private readonly scene: Scene) {}
 
-  spawn(position: Vector3, level: number): void {
+  spawn(position: Vector3, options: EnemySpawnOptions): void {
+    const healthMultiplier = options.healthMultiplier ?? 1;
+    const damageMultiplier = options.damageMultiplier ?? 1;
+    const sizeMultiplier = options.sizeMultiplier ?? 1;
     const definition = {
       ...walkerDefinition,
-      maxHealth: walkerDefinition.maxHealth + level * 8,
-      speed: walkerDefinition.speed + Math.min(level * 0.08, 0.9),
-      damage: walkerDefinition.damage + Math.floor(level / 2)
+      maxHealth: options.baseHealth * healthMultiplier,
+      speed: walkerDefinition.speed + Math.min(options.wave * 0.04, 0.5),
+      damage: walkerDefinition.damage * damageMultiplier,
+      radius: walkerDefinition.radius * sizeMultiplier
     };
 
     const id = this.nextId;
@@ -92,6 +124,7 @@ export class EnemyManager {
     rightArm.rotation.z = -0.18;
     mesh.add(body, head, leftArm, rightArm, leftLeg, rightLeg);
     mesh.position.copy(position);
+    mesh.scale.setScalar(sizeMultiplier);
     this.scene.add(mesh);
 
     const hitMeshes = [body, head, leftArm, rightArm, leftLeg, rightLeg];
@@ -114,6 +147,7 @@ export class EnemyManager {
         rightLeg
       },
       health: definition.maxHealth,
+      baseScale: sizeMultiplier,
       attackTimer: Math.random() * 0.4,
       age: Math.random() * 10,
       hitTimer: 0,
@@ -122,9 +156,10 @@ export class EnemyManager {
     });
   }
 
-  update(delta: number, player: Player): void {
-    const playerFlat = player.position.clone();
+  update(delta: number, target: EnemyAttackTarget, barricade?: EnemyBarricadeTarget): void {
+    const playerFlat = target.position.clone();
     playerFlat.y = 0;
+    const barricadeAlive = Boolean(barricade && barricade.health > 0);
 
     for (const enemy of this.enemies.values()) {
       enemy.age += delta;
@@ -143,22 +178,37 @@ export class EnemyManager {
 
       const enemyFlat = enemy.mesh.position.clone();
       enemyFlat.y = 0;
-      const toPlayer = playerFlat.clone().sub(enemyFlat);
-      const distance = toPlayer.length();
+      const targetFlat = barricadeAlive && barricade
+        ? new Vector3(
+            MathUtils.clamp(enemyFlat.x, -barricade.halfWidth, barricade.halfWidth),
+            0,
+            barricade.z
+          )
+        : playerFlat;
+      const toTarget = targetFlat.clone().sub(enemyFlat);
+      const distance = toTarget.length();
 
       if (distance > enemy.definition.attackRange) {
         enemy.state = enemy.hitTimer > 0 ? 'hit' : 'chasing';
-        toPlayer.normalize();
+        toTarget.normalize();
         const speed = enemy.hitTimer > 0 ? enemy.definition.speed * 0.25 : enemy.definition.speed;
-        enemy.mesh.position.add(toPlayer.multiplyScalar(speed * delta));
-        enemy.mesh.lookAt(player.position.x, enemy.mesh.position.y, player.position.z);
+        enemy.mesh.position.add(toTarget.multiplyScalar(speed * delta));
+        if (barricadeAlive && barricade) {
+          enemy.mesh.position.z = Math.min(enemy.mesh.position.z, barricade.z - 0.25);
+        }
+        enemy.mesh.position.x = MathUtils.clamp(enemy.mesh.position.x, -10, 10);
+        enemy.mesh.lookAt(targetFlat.x, enemy.mesh.position.y, targetFlat.z);
         this.animateWalk(enemy);
       } else {
         enemy.state = 'attacking';
         enemy.attackTimer -= delta;
         this.animateAttack(enemy);
         if (enemy.attackTimer <= 0) {
-          player.damage(enemy.definition.damage);
+          if (barricadeAlive && barricade) {
+            barricade.damage(enemy.definition.damage);
+          } else {
+            target.damage(enemy.definition.damage);
+          }
           enemy.attackTimer = enemy.definition.attackCooldown;
         }
       }
@@ -190,7 +240,7 @@ export class EnemyManager {
     enemy.health -= amount;
     enemy.hitTimer = 0.12;
     enemy.mesh.position.z -= 0.16;
-    const scale = 0.88 + 0.12 * Math.max(0, enemy.health / enemy.definition.maxHealth);
+    const scale = enemy.baseScale * (0.88 + 0.12 * Math.max(0, enemy.health / enemy.definition.maxHealth));
     enemy.mesh.scale.setScalar(scale);
 
     if (enemy.health <= 0) {
@@ -202,6 +252,17 @@ export class EnemyManager {
     }
 
     return 'hit';
+  }
+
+  damageAll(amount: number, maxTargets = Number.POSITIVE_INFINITY): number {
+    let damaged = 0;
+    for (const enemy of this.enemies.values()) {
+      if (enemy.state === 'dead') continue;
+      this.damage(enemy.id, amount);
+      damaged += 1;
+      if (damaged >= maxTargets) break;
+    }
+    return damaged;
   }
 
   clear(): void {
@@ -220,6 +281,36 @@ export class EnemyManager {
       remaining: this.getCount(),
       killed: this.killed
     };
+  }
+
+  getHealthBars(camera: PerspectiveCamera): EnemyHealthBar[] {
+    const bars: EnemyHealthBar[] = [];
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.state === 'dead') continue;
+
+      const point = enemy.mesh.position.clone();
+      point.y += enemy.baseScale * 2.6;
+      const projected = point.project(camera);
+
+      if (projected.z < -1 || projected.z > 1) continue;
+
+      const x = (projected.x * 0.5 + 0.5) * 100;
+      const y = (-projected.y * 0.5 + 0.5) * 100;
+      if (x < -4 || x > 104 || y < -4 || y > 104) continue;
+
+      bars.push({
+        id: enemy.id,
+        x,
+        y,
+        healthPercent: Math.min(
+          100,
+          Math.max(0, (enemy.health / enemy.definition.maxHealth) * 100)
+        )
+      });
+    }
+
+    return bars;
   }
 
   getCount(): number {

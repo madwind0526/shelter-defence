@@ -1,4 +1,4 @@
-export type GameMode = 'ready' | 'playing' | 'upgrade' | 'gameover';
+export type GameMode = 'ready' | 'playing' | 'upgrade' | 'gameover' | 'paused';
 
 export type UpgradeId =
   | 'damage'
@@ -10,12 +10,17 @@ export type UpgradeId =
 
 export type WeaponSoundId =
   | 'pistol'
+  | 'revolver'
   | 'ak47'
-  | 'm16'
+  | 'm4Carbine'
+  | 'mp5k'
+  | 'rifle'
+  | 'mgl'
   | 'machineGun'
   | 'shotgun'
   | 'laserGun'
-  | 'plasmaGun'
+  | 'turret1'
+  | 'turret2'
   | 'explosion'
   | 'fallingBomb';
 
@@ -36,6 +41,7 @@ export interface WeaponDefinition {
   reloadTime: number;
   range: number;
   spread: number;
+  criticalChance: number;
   soundId: WeaponSoundId;
 }
 
@@ -71,6 +77,23 @@ export interface PreparationSoldier {
   equippedWeaponId: string;
 }
 
+export interface PreparationTurret {
+  id: string;
+  name: string;
+  image: string;
+  kind: 'gun' | 'flame';
+  hireCost: number;
+  hiredCount: number;
+  stats: {
+    str: number;
+    dex: number;
+    int: number;
+  };
+  damage: number;
+  fireRate: number;
+  maxShield: number;
+}
+
 export interface PreparationWeapon {
   id: string;
   name: string;
@@ -78,6 +101,18 @@ export interface PreparationWeapon {
   summary: string;
   magazineSize: number;
   trait: string;
+  statScale: {
+    str: number;
+    dex: number;
+    int: number;
+  };
+  damage: number;
+  fireRate: number;
+  criticalChance: number;
+  reloadTime: number;
+  range: number;
+  spread: number;
+  soundId: WeaponSoundId;
 }
 
 export interface PreparationItem {
@@ -93,10 +128,46 @@ export interface PreparationItem {
 export interface PreparationSnapshot {
   soldiers: PreparationSoldier[];
   weapons: PreparationWeapon[];
+  turrets: PreparationTurret[];
+  turretSlots: Array<PreparationTurret | null>;
   items: PreparationItem[];
   selectedSoldierIndex: number;
   selectedWeaponIndex: number;
   gold: number;
   rubi: number;
   message: string;
+}
+
+export interface WaveSnapshot {
+  stage: number;
+  wave: number;
+  waveInStage: number;
+  wavesPerStage: number;
+  total: number;
+  remaining: number;
+}
+
+export interface TurretSnapshot {
+  installed: boolean;
+  id?: string;
+  name?: string;
+  image?: string;
+  kind?: 'gun' | 'flame';
+  damage?: number;
+  fireRate?: number;
+  shield: number;
+  maxShield: number;
+}
+
+export interface BarricadeSnapshot {
+  health: number;
+  maxHealth: number;
+}
+
+export interface SoldierHealthSnapshot {
+  soldierId: string;
+  health: number;
+  maxHealth: number;
+  ammo: number;
+  magazines: number;
 }
