@@ -233,13 +233,15 @@ export class EnemyManager {
     };
   }
 
-  damage(enemyId: number, amount: number): EnemyDamageResult {
+  damage(enemyId: number, amount: number, knockback = true): EnemyDamageResult {
     const enemy = this.enemies.get(enemyId);
     if (!enemy || enemy.state === 'dead') return 'none';
 
     enemy.health -= amount;
     enemy.hitTimer = 0.12;
-    enemy.mesh.position.z -= 0.16;
+    if (knockback) {
+      enemy.mesh.position.z -= 0.16;
+    }
     const scale = enemy.baseScale * (0.88 + 0.12 * Math.max(0, enemy.health / enemy.definition.maxHealth));
     enemy.mesh.scale.setScalar(scale);
 
@@ -258,7 +260,7 @@ export class EnemyManager {
     let damaged = 0;
     for (const enemy of this.enemies.values()) {
       if (enemy.state === 'dead') continue;
-      this.damage(enemy.id, amount);
+      this.damage(enemy.id, amount, false);
       damaged += 1;
       if (damaged >= maxTargets) break;
     }
@@ -289,20 +291,13 @@ export class EnemyManager {
     for (const enemy of this.enemies.values()) {
       if (enemy.state === 'dead') continue;
 
-      const point = enemy.mesh.position.clone();
-      point.y += enemy.baseScale * 2.6;
-      const projected = point.project(camera);
-
-      if (projected.z < -1 || projected.z > 1) continue;
-
-      const x = (projected.x * 0.5 + 0.5) * 100;
-      const y = (-projected.y * 0.5 + 0.5) * 100;
-      if (x < -4 || x > 104 || y < -4 || y > 104) continue;
+      const position = this.getOverheadScreenPosition(enemy.id, camera);
+      if (!position) continue;
 
       bars.push({
         id: enemy.id,
-        x,
-        y,
+        x: position.x,
+        y: position.y,
         healthPercent: Math.min(
           100,
           Math.max(0, (enemy.health / enemy.definition.maxHealth) * 100)
@@ -311,6 +306,26 @@ export class EnemyManager {
     }
 
     return bars;
+  }
+
+  getOverheadScreenPosition(
+    enemyId: number,
+    camera: PerspectiveCamera
+  ): { x: number; y: number } | null {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy) return null;
+
+    const point = enemy.mesh.position.clone();
+    point.y += enemy.baseScale * 2.85;
+    const projected = point.project(camera);
+
+    if (projected.z < -1 || projected.z > 1) return null;
+
+    const x = (projected.x * 0.5 + 0.5) * 100;
+    const y = (-projected.y * 0.5 + 0.5) * 100;
+    if (x < -4 || x > 104 || y < -4 || y > 104) return null;
+
+    return { x, y };
   }
 
   getCount(): number {

@@ -1,6 +1,6 @@
 import { WeaponSoundId } from './types';
 
-type EffectSoundId = 'reload';
+type EffectSoundId = 'reload' | 'gameStart' | 'gameOver' | 'rank';
 
 const soundAssets: Record<WeaponSoundId, string> = {
   pistol: new URL('../../assets/sounds/pistol.mp3', import.meta.url).href,
@@ -23,7 +23,10 @@ const soundAssets: Record<WeaponSoundId, string> = {
 };
 
 const effectAssets: Record<EffectSoundId, string> = {
-  reload: new URL('../../assets/sounds/Gun-Reload.mp3', import.meta.url).href
+  reload: new URL('../../assets/sounds/Gun-Reload.mp3', import.meta.url).href,
+  gameStart: new URL('../../assets/sounds/GameStart.mp3', import.meta.url).href,
+  gameOver: new URL('../../assets/sounds/GameOver.mp3', import.meta.url).href,
+  rank: new URL('../../assets/sounds/Rank.mp3', import.meta.url).href
 };
 
 const soundVolumes: Record<WeaponSoundId, number> = {
@@ -53,6 +56,9 @@ export class AudioManager {
       this.preload(id, ['machineGun', 'mp5k', 'turret1', 'turret2'].includes(id) ? 8 : 4);
     }
     this.preloadEffect('reload', 3, 0.34);
+    this.preloadEffect('gameStart', 1, 0.46);
+    this.preloadEffect('gameOver', 1, 0.5);
+    this.preloadEffect('rank', 1, 0.48);
   }
 
   unlock(): void {
@@ -82,6 +88,22 @@ export class AudioManager {
 
   playReload(): void {
     this.playEffect('reload', 0.98 + Math.random() * 0.06);
+  }
+
+  playGameStart(): void {
+    this.playEffect('gameStart');
+  }
+
+  playGameOver(): void {
+    this.playEffect('gameOver');
+  }
+
+  playRank(): void {
+    this.playEffect('rank');
+  }
+
+  stopGameStart(): void {
+    this.stopEffect('gameStart');
   }
 
   private preload(id: WeaponSoundId, count: number): void {
@@ -117,9 +139,7 @@ export class AudioManager {
     audio.currentTime = 0;
     audio.volume = soundVolumes[id];
     audio.playbackRate = playbackRate;
-    void audio.play().catch(() => {
-      this.unlocked = false;
-    });
+    void audio.play().catch(() => undefined);
   }
 
   private stopAudio(audio: HTMLAudioElement, id: WeaponSoundId): void {
@@ -139,8 +159,17 @@ export class AudioManager {
     audio.pause();
     audio.currentTime = 0;
     audio.playbackRate = playbackRate;
-    void audio.play().catch(() => {
-      this.unlocked = false;
-    });
+    void audio.play().catch(() => undefined);
+  }
+
+  private stopEffect(id: EffectSoundId): void {
+    const pool = this.effects.get(id);
+    if (!pool) return;
+
+    for (const audio of pool) {
+      if (audio.paused) continue;
+      audio.pause();
+      audio.currentTime = 0;
+    }
   }
 }

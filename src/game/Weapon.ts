@@ -181,7 +181,11 @@ export class WeaponController {
       damageAmount = powerShot
         ? 999999
         : definition.damage * damageMultiplier * criticalMultiplier;
-      result = enemies.damage(hit.enemyId, damageAmount);
+      result = enemies.damage(
+        hit.enemyId,
+        damageAmount,
+        this.shouldKnockBack(definition)
+      );
     }
 
     this.addTrail(start, end, hit ? '#fffb9a' : '#70f0ff');
@@ -223,6 +227,22 @@ export class WeaponController {
     this.reloadMultiplier = 1;
   }
 
+  resetAll(): void {
+    this.definition = { ...starterWeapon };
+    this.ammo = this.definition.magazineSize;
+    this.cooldown = 0;
+    this.reloadTimer = 0;
+    this.resetStageModifiers();
+    this.infiniteAmmo = false;
+    this.powerShot = false;
+    this.noReload = false;
+    for (const trail of this.trails.splice(0)) {
+      this.scene.remove(trail.line);
+      trail.line.geometry.dispose();
+      (trail.line.material as LineBasicMaterial).dispose();
+    }
+  }
+
   private addTrail(start: Vector3, end: Vector3, color: string): void {
     const geometry = new BufferGeometry().setFromPoints([start, end]);
     const material = new LineBasicMaterial({
@@ -234,5 +254,13 @@ export class WeaponController {
     const line = new Line(geometry, material);
     this.scene.add(line);
     this.trails.push({ line, ttl: 0.08 });
+  }
+
+  private shouldKnockBack(definition: WeaponDefinition): boolean {
+    return (
+      definition.id === 'shotgun' ||
+      definition.id === 'milkor-mgl' ||
+      definition.soundId === 'machineGun'
+    );
   }
 }

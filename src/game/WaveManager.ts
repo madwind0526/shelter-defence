@@ -1,6 +1,7 @@
 import { MathUtils, Vector3 } from 'three';
 import { EnemyManager, EnemySpawnOptions } from './Enemy';
 import { Player } from './Player';
+import { defaultStageRoadProfile, StageRoadProfile } from './StageRoadMask';
 import { WaveSnapshot } from './types';
 
 type WaveState = 'none' | 'waveComplete' | 'stageComplete';
@@ -21,8 +22,25 @@ export class WaveManager {
   private spawnTimer = 0;
   private breakTimer = 1.2;
   private awaitingContinue = false;
+  private roadProfile: StageRoadProfile = defaultStageRoadProfile;
 
   constructor(private readonly enemies: EnemyManager) {}
+
+  setRoadProfile(profile: StageRoadProfile): void {
+    this.roadProfile = profile;
+  }
+
+  reset(): void {
+    this.wave = 0;
+    this.stage = 1;
+    this.waveInStage = 0;
+    this.spawnQueue = [];
+    this.enemiesTotal = 0;
+    this.spawnTimer = 0;
+    this.breakTimer = 1.2;
+    this.awaitingContinue = false;
+    this.roadProfile = defaultStageRoadProfile;
+  }
 
   update(delta: number, player: Player): WaveState {
     if (this.awaitingContinue) {
@@ -142,12 +160,16 @@ export class WaveManager {
   }
 
   private getSpawnPosition(playerPosition: Vector3): Vector3 {
-    const laneWidth = MathUtils.clamp(7 + this.waveInStage * 0.35, 7, 10);
+    const laneWidth = MathUtils.clamp(
+      this.roadProfile.laneHalfWidth + this.waveInStage * 0.12,
+      4,
+      10
+    );
     const x = playerPosition.x + MathUtils.randFloatSpread(laneWidth * 2);
     const z = playerPosition.z - MathUtils.randFloat(28, 42);
 
     return new Vector3(
-      MathUtils.clamp(x, -10, 10),
+      MathUtils.clamp(x, -laneWidth, laneWidth),
       0,
       MathUtils.clamp(z, -37, 37)
     );

@@ -343,6 +343,35 @@ The current focus is project orientation and maintainability:
   - Wave Clear and Stage Clear panels now use digital-font, centered text and omit the small eyebrow labels.
   - Lowered the default crosshair further.
   - Mid boss and big boss health/damage multipliers were increased by 10x from the previous values.
+- Latest main feedback/stage polish:
+  - Power Shot damage popups now show `+∞` instead of `+999999`.
+  - Weapon damage and critical damage popups now project above the zombie head, sharing the same overhead anchor as zombie health bars.
+  - Kill rewards still add Score/Gold, but the floating Gold popup was removed from zombie kills.
+  - The wave-clear upgrade panel title now reads `CHOOSE A CARD`, with the reward line centered in digital typography.
+  - Audio is re-unlocked when resuming from upgrade, stage clear, or control overlays, and interrupted shot playback no longer disables future sound.
+  - The main wave title now includes `STAGE N` before `WAVES`.
+  - Adjusted first-person squad weapon formation by moving soldier slots 1, 2, and 3 toward the center while leaving slots 4 and 5 in place.
+  - Stage transitions and cheat stage jumps reset aim/view alignment so the transparent map layer re-syncs with the stage background.
+- Latest stage road-mask update:
+  - Main stage backgrounds now use `assets/images/stages-bg/bg1.jpg` through `bg6.jpg`.
+  - Added `assets/images/stages-bg/bg1-road.png` through `bg6-road.png` as black-road/white-blocked mask inputs.
+  - Added `StageRoadMaskLoader`, which reads the black road pixels in the browser and derives road top, center, width, and gameplay lane width.
+  - Stage start now uses the mask road top to solve a matching camera pitch, aligning the 3D map/spawn far line with each stage background's road start.
+  - Wave spawning now uses the mask-derived lane width instead of a fixed `-10..10` lane.
+- Latest menu/reset/rank/sound update:
+  - Removed the small top `Menu` eyebrow from the F1 MENU panel.
+  - F1 MENU `EXIT` now performs a full fresh reset of gameplay, prep economy/loadout, cheats, waves, barricade, specials, turrets, weapon modifiers, and score before returning to the intro.
+  - F1 MENU `STORE` preserves the current run state when returning with Start Game, while normal intro/prep Start Game still begins a fresh run.
+  - Added `GameStart.mp3`, `GameOver.mp3`, and `Rank.mp3` playback hooks for the intro, GameOver, and Top Rank flows.
+  - Stage Clear now displays `images/NextStage.png`; after Stage 6, the button returns to a fresh intro instead of wrapping to another background.
+  - Top Rank now wraps `TopRanks.png` and the ranking rows in a translucent frame.
+  - `images/GameOver.png` remains the GameOver display image.
+  - Removed stale references to deleted legacy item-bomb/rocket/shield/slow assets from `AssetUrls.ts`.
+- Latest combat feedback and road-mask update:
+  - Damage popups now aggregate rapid same-zombie hits into one team-total popup instead of showing each soldier hit separately.
+  - Enemy knockback is now limited to the shotgun, Milkor MGL, and machine-gun sound family weapons.
+  - Stage road masks are force-reloaded when a stage is entered, so revised `bg3-road.png` and `bg4-road.png` files are re-analyzed without keeping stale in-memory profiles.
+  - Verified the revised bg3/bg4 road masks read as black road masks; bg3 road top is about 49% and bg4 road top is about 50% of image height.
 
 ## Important Current State
 
@@ -427,6 +456,10 @@ The current focus is project orientation and maintainability:
 - A Vite dev server is responding at `http://127.0.0.1:5173/`.
 - `npm run build` succeeded after adding zombie health bars, damage/critical popups, and the latest HUD spacing/aim/weapon-position adjustments; Vite still reports the same chunk-size warning.
 - `npm run build` succeeded after the menu, cheat indicator, GameOver ranking, stage-reset, crosshair, and boss multiplier changes; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the latest damage popup, upgrade card, sound resume, stage title, weapon formation, and stage alignment changes; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding road-mask based stage background alignment and lane-width calibration; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after the F1 menu reset, NextStage/GameOver/Rank audio-image flow, Top Rank frame, and stale asset reference cleanup; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after aggregating team damage popups, limiting knockback weapons, and force-reloading stage road masks; Vite still reports the same chunk-size warning.
 
 ## Next Agent Startup Checklist
 

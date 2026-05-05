@@ -39,6 +39,7 @@ interface HudState {
   maxHealth: number;
   ammo: number;
   magazine: number;
+  stage: number;
   wave: number;
   waveInStage: number;
   wavesPerStage: number;
@@ -143,7 +144,7 @@ export class Hud {
         </div>
 
         <div class="main-wave-card">
-          <strong>WAVES (${Math.max(1, state.waveInStage)}/${state.wavesPerStage})</strong>
+          <strong>STAGE ${Math.max(1, state.stage)} WAVES (${Math.max(1, state.waveInStage)}/${state.wavesPerStage})</strong>
           <b>${waveRemaining}/${waveTotal} Zombies are remaining</b>
         </div>
 
@@ -624,8 +625,8 @@ export class Hud {
     this.overlay.className = 'overlay visible';
     this.overlay.innerHTML = `
       <section class="panel upgrade-panel">
-        <h2>Choose an upgrade</h2>
-        <p class="clear-reward">+${reward.magazines} Magazine / +${this.formatNumber(reward.gold)} Gold / +${reward.rubi} Rubi</p>
+        <h2>CHOOSE A CARD</h2>
+        <p class="clear-reward">+${reward.magazines} MAGAZINE / +${this.formatNumber(reward.gold)} GOLD / +${reward.rubi} RUBI</p>
         <div class="upgrade-grid"></div>
       </section>
     `;
@@ -651,14 +652,20 @@ export class Hud {
     }
   }
 
-  showStageClear(stage: number, reward: ClearReward, onNext: () => void): void {
+  showStageClear(
+    stage: number,
+    reward: ClearReward,
+    hasNextStage: boolean,
+    onNext: () => void
+  ): void {
     this.overlay.className = 'overlay visible';
     this.overlay.innerHTML = `
       <section class="panel stage-clear-panel">
+        <img class="next-stage-image" src="${imageAssets.nextStage}" alt="Next Stage" />
         <h2>Stage ${stage} Clear</h2>
         <p class="clear-reward">+${this.formatNumber(reward.gold)} Gold / +${reward.rubi} Rubi</p>
-        <p>Stage upgrades cleared. Next stage begins with stronger zombies.</p>
-        <button type="button">Next Stage</button>
+        <p>${hasNextStage ? 'Next stage begins with stronger zombies.' : 'All prepared stages are cleared.'}</p>
+        <button type="button">${hasNextStage ? 'Next Stage' : 'Title'}</button>
       </section>
     `;
     this.overlay.querySelector('button')?.addEventListener('click', onNext, {
@@ -690,7 +697,6 @@ export class Hud {
     this.overlay.className = 'overlay visible';
     this.overlay.innerHTML = `
       <section class="panel main-menu-panel">
-        <p class="eyebrow">Menu</p>
         <h2>MENU</h2>
         <div class="menu-action-grid">
           <button class="menu-prep" type="button">STORE</button>
@@ -741,7 +747,12 @@ export class Hud {
     this.overlay.querySelector<HTMLButtonElement>('.cheat-back')?.addEventListener('click', handlers.onBack, { once: true });
   }
 
-  showGameOver(score: number, stage: number, onExit: () => void): void {
+  showGameOver(
+    score: number,
+    stage: number,
+    onExit: () => void,
+    onRankOpen?: () => void
+  ): void {
     this.overlay.className = 'overlay visible';
     this.overlay.innerHTML = `
       <section class="gameover-panel">
@@ -754,25 +765,32 @@ export class Hud {
       'click',
       () => {
         if (this.qualifiesForLeaderboard(score)) {
-          this.showNameEntry(score, stage, onExit);
+          this.showNameEntry(score, stage, onExit, onRankOpen);
         } else {
-          this.showTopRanks(onExit);
+          this.showTopRanks(onExit, undefined, onRankOpen);
         }
       },
       { once: true }
     );
   }
 
-  showTopRanks(onExit: () => void, entries = this.loadLeaderboard()): void {
+  showTopRanks(
+    onExit: () => void,
+    entries = this.loadLeaderboard(),
+    onOpen?: () => void
+  ): void {
+    onOpen?.();
     this.overlay.className = 'overlay visible rank-overlay';
     this.overlay.innerHTML = `
       <section class="top-rank-panel">
-        <img class="top-rank-image" src="${imageAssets.topRanks}" alt="Top Ranks" />
-        <div class="top-rank-list">
-          <div class="top-rank-row top-rank-header">
-            <span>Rank</span><span>Name</span><span>Score</span><span>Stage</span>
+        <div class="top-rank-frame">
+          <img class="top-rank-image" src="${imageAssets.topRanks}" alt="Top Ranks" />
+          <div class="top-rank-list">
+            <div class="top-rank-row top-rank-header">
+              <span>Rank</span><span>Name</span><span>Score</span><span>Stage</span>
+            </div>
+            ${this.renderRankRows(entries)}
           </div>
-          ${this.renderRankRows(entries)}
         </div>
         <p class="gameover-prompt">Click</p>
       </section>
@@ -803,14 +821,19 @@ export class Hud {
   ): void {
     const popup = document.createElement('span');
     popup.className = `floating-damage${critical ? ' critical' : ''}`;
-    popup.textContent = `+${Math.ceil(amount)}`;
+    popup.textContent = amount >= 999999 ? '+∞' : `+${Math.ceil(amount)}`;
     popup.style.left = `${xPercent}%`;
     popup.style.top = `${yPercent}%`;
     this.shell.append(popup);
     window.setTimeout(() => popup.remove(), 900);
   }
 
-  private showNameEntry(score: number, stage: number, onExit: () => void): void {
+  private showNameEntry(
+    score: number,
+    stage: number,
+    onExit: () => void,
+    onRankOpen?: () => void
+  ): void {
     this.overlay.className = 'overlay visible name-entry-overlay';
     this.overlay.innerHTML = `
       <section class="gameover-panel name-entry-panel">
@@ -827,7 +850,7 @@ export class Hud {
     const input = this.overlay.querySelector<HTMLInputElement>('.rank-name-input');
     const submit = (): void => {
       const updated = this.addLeaderboardEntry(input?.value ?? '', score, stage);
-      this.showTopRanks(onExit, updated);
+      this.showTopRanks(onExit, updated, onRankOpen);
     };
 
     input?.addEventListener('click', event => event.stopPropagation());
@@ -1055,3 +1078,4 @@ export class Hud {
     return String(Math.ceil(value));
   }
 }
+

@@ -20,6 +20,11 @@ import { EnemyManager } from './Enemy';
 import { Input } from './Input';
 import { Player } from './Player';
 import { PreparationState } from './PreparationState';
+import {
+  defaultStageRoadProfile,
+  StageRoadMaskLoader,
+  StageRoadProfile
+} from './StageRoadMask';
 import { UpgradeSystem } from './UpgradeSystem';
 import { WeaponController } from './Weapon';
 import { WeaponView } from './WeaponView';
@@ -57,6 +62,13 @@ interface ClearReward {
   magazines: number;
 }
 
+interface PendingDamagePopup {
+  amount: number;
+  critical: boolean;
+  point: Vector3;
+  timer: number;
+}
+
 export class Game {
   private readonly hud: Hud;
   private readonly scene = new Scene();
@@ -73,6 +85,11 @@ export class Game {
   private readonly size = new Vector2();
   private readonly textureLoader = new TextureLoader();
   private readonly stageBackgrounds = new Map<number, Texture>();
+  private readonly roadMaskLoader = new StageRoadMaskLoader(imageAssets.stageRoadMasks);
+  private readonly roadTopWorldPoint = new Vector3(0, 0, -36);
+  private stageRoadProfile: StageRoadProfile = defaultStageRoadProfile;
+  private currentStageNumber = 1;
+  private preparationFromRun = false;
 
   private mode: GameMode = 'ready';
   private lastTime = 0;
@@ -89,6 +106,7 @@ export class Game {
   private readonly aim = new Vector2(0, 0);
   private score = 0;
   private readonly soldierCombat = new Map<string, SoldierCombatState>();
+  private readonly pendingDamagePopups = new Map<number, PendingDamagePopup>();
   private readonly turretFireCooldowns = new Map<number, number>();
   private readonly barricade: BarricadeSnapshot = {
     health: 1500,
@@ -132,13 +150,12 @@ export class Game {
   }
 
   private beginRun(): void {
+    this.audio.stopGameStart();
     this.audio.unlock();
+    this.resetRunProgress();
     this.setupCombatantsFromPreparation();
-    this.resetSpecialCounters();
-    this.resetBarricade();
     this.resetAim();
     this.alignStageMapToBackground();
-    this.score = 0;
     this.mode = 'playing';
     this.hud.hideOverlay();
     void this.hud.getCanvasHost().requestPointerLock();
@@ -146,52 +163,55 @@ export class Game {
 
   private showIntro(): void {
     this.mode = 'ready';
+    this.audio.unlock();
+    this.audio.playGameStart();
     this.hud.showIntro(
       () => this.openPreparation(),
       () => this.beginRun()
     );
   }
 
-  private openPreparation(): void {
-    this.mode = 'ready';
+  private openPreparation(fromRun = false): void {
+    this.preparationFromRun = fromRun;
+    this.mode = fromRun ? 'paused' : 'ready';
     this.hud.showPreparation(this.preparation.snapshot(), {
-      onBack:        () => this.showIntro(),
-      onStart:       () => this.beginRun(),
+      onBack:        () => fromRun ? this.resumeFromPreparation() : this.showIntro(),
+      onStart:       () => fromRun ? this.resumeFromPreparation() : this.beginRun(),
       onPrevSoldier: () => {
         this.preparation.selectSoldier(-1);
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onNextSoldier: () => {
         this.preparation.selectSoldier(1);
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onPrevWeapon: () => {
         this.preparation.selectWeapon(-1);
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onNextWeapon: () => {
         this.preparation.selectWeapon(1);
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onEquipWeapon: () => {
         this.preparation.equipSelectedWeapon();
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onHire: () => {
         this.preparation.hireSelectedSoldier();
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onFireTurret: () => {
         this.preparation.fireSelectedTurret();
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onBuyItem: (itemId: string) => {
         this.preparation.buyItem(itemId);
-        this.openPreparation();
+        this.openPreparation(fromRun);
       },
       onResetItems: () => {
         this.preparation.resetItems();
-        this.openPreparation();
+        this.openPreparation(fromRun);
       }
     });
   }
@@ -199,6 +219,32 @@ export class Game {
   private restart(): void {
     this.enemies.clear();
     window.location.reload();
+  }
+
+  private resetRunProgress(): void {
+    this.enemies.clear();
+    this.waves.reset();
+    this.upgrades.resetStageUpgrades();
+    this.weapon.resetAll();
+    this.player.maxHealth = 100;
+    this.player.health = 100;
+    this.player.incomingDamageMultiplier = 1;
+    this.score = 0;
+    this.activeSoldierId = null;
+    this.activeWeaponId = null;
+    this.soldierCombat.clear();
+    this.pendingDamagePopups.clear();
+    this.turretFireCooldowns.clear();
+    this.resetSpecialCounters();
+    this.resetBarricade();
+    this.cheatModeUsed = false;
+    this.cheatJumpUsed = false;
+    this.turrets = Array.from({ length: 4 }, () => ({
+      installed: false,
+      shield: 0,
+      maxShield: 100
+    }));
+    this.setStageBackground(1);
   }
 
   private readonly tick = (time: number): void => {
@@ -242,9 +288,17 @@ export class Game {
         this.mode = 'gameover';
         this.stopLivingSoldierWeaponShots();
         document.exitPointerLock();
-        this.hud.showGameOver(this.score, this.waves.stage, () => this.exitToIntro());
+        this.audio.playGameOver();
+        this.hud.showGameOver(
+          this.score,
+          this.waves.stage,
+          () => this.resetToFreshIntro(),
+          () => this.audio.playRank()
+        );
       }
     }
+
+    this.updateFloatingDamagePopups(delta);
 
     const snapshot = this.enemies.getSnapshot();
     const preparationSnapshot = this.preparation.snapshot();
@@ -255,6 +309,7 @@ export class Game {
       ammo: this.weapon.ammo,
       magazine: this.weapon.definition.magazineSize,
       wave: waveSnapshot.wave,
+      stage: waveSnapshot.stage,
       waveInStage: waveSnapshot.waveInStage,
       waveTotal: waveSnapshot.total,
       wavesPerStage: waveSnapshot.wavesPerStage,
@@ -300,8 +355,46 @@ export class Game {
   }
 
   private alignStageMapToBackground(): void {
-    this.player.resetView(0.16);
+    this.player.resetView(this.getAlignedStagePitch());
+    this.player.update();
+    this.player.camera.updateProjectionMatrix();
     this.weaponView.setAim(this.aim.x, this.aim.y);
+  }
+
+  private getAlignedStagePitch(): number {
+    const targetY = this.stageRoadProfile.topFraction;
+    const lowPitch = -0.45;
+    const highPitch = 0.75;
+    const lowY = this.projectRoadTopY(lowPitch);
+    const highY = this.projectRoadTopY(highPitch);
+    const increasing = highY > lowY;
+    const minY = Math.min(lowY, highY);
+    const maxY = Math.max(lowY, highY);
+
+    if (targetY <= minY) return increasing ? lowPitch : highPitch;
+    if (targetY >= maxY) return increasing ? highPitch : lowPitch;
+
+    let low = lowPitch;
+    let high = highPitch;
+    for (let i = 0; i < 16; i += 1) {
+      const mid = (low + high) / 2;
+      const midY = this.projectRoadTopY(mid);
+      if ((midY < targetY) === increasing) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+
+    return (low + high) / 2;
+  }
+
+  private projectRoadTopY(pitch: number): number {
+    this.player.resetView(pitch);
+    this.player.update();
+    this.player.camera.updateMatrixWorld(true);
+    const projected = this.roadTopWorldPoint.clone().project(this.player.camera);
+    return -projected.y * 0.5 + 0.5;
   }
 
   private updateSpecialCounters(delta: number): void {
@@ -455,7 +548,8 @@ export class Game {
         outcome.hitPoint &&
         outcome.damageAmount
       ) {
-        this.showFloatingDamage(
+        this.queueFloatingDamage(
+          outcome.hitEnemyId,
           outcome.hitPoint,
           outcome.damageAmount,
           Boolean(outcome.critical)
@@ -463,7 +557,7 @@ export class Game {
       }
 
       if (outcome.result === 'killed') {
-        this.awardZombieKill(outcome.hitPoint);
+        this.awardZombieKill();
       }
 
       if (this.weapon.noReload && combat.ammo <= 0) {
@@ -528,26 +622,63 @@ export class Game {
     }
   }
 
-  private awardZombieKill(point?: Vector3): void {
+  private awardZombieKill(): void {
     const scoreGain = 50 + Math.floor(Math.random() * 101);
     const goldGain = 20 + Math.floor(Math.random() * 61);
     this.score += scoreGain;
     this.preparation.addGold(goldGain);
+  }
 
-    if (point) {
-      const projected = point.clone().project(this.player.camera);
-      const x = (projected.x * 0.5 + 0.5) * 100;
-      const y = (-projected.y * 0.5 + 0.5) * 100;
-      if (x >= -10 && x <= 110 && y >= -10 && y <= 110) {
-        this.hud.showFloatingGold(goldGain, x, y);
-      }
+  private queueFloatingDamage(
+    enemyId: number | undefined,
+    point: Vector3,
+    amount: number,
+    critical: boolean
+  ): void {
+    if (typeof enemyId !== 'number') {
+      this.showFloatingDamage(undefined, point, amount, critical);
+      return;
+    }
+
+    const pending = this.pendingDamagePopups.get(enemyId);
+    if (pending) {
+      pending.amount += amount;
+      pending.critical = pending.critical || critical;
+      pending.point.copy(point);
+      pending.timer = 0.07;
+      return;
+    }
+
+    this.pendingDamagePopups.set(enemyId, {
+      amount,
+      critical,
+      point: point.clone(),
+      timer: 0.07
+    });
+  }
+
+  private updateFloatingDamagePopups(delta: number): void {
+    for (const [enemyId, popup] of this.pendingDamagePopups.entries()) {
+      popup.timer -= delta;
+      if (popup.timer > 0) continue;
+
+      this.pendingDamagePopups.delete(enemyId);
+      this.showFloatingDamage(enemyId, popup.point, popup.amount, popup.critical);
     }
   }
 
-  private showFloatingDamage(point: Vector3, amount: number, critical: boolean): void {
-    const projected = point.clone().project(this.player.camera);
-    const x = (projected.x * 0.5 + 0.5) * 100;
-    const y = (-projected.y * 0.5 + 0.5) * 100;
+  private showFloatingDamage(
+    enemyId: number | undefined,
+    point: Vector3,
+    amount: number,
+    critical: boolean
+  ): void {
+    const overhead = typeof enemyId === 'number'
+      ? this.enemies.getOverheadScreenPosition(enemyId, this.player.camera)
+      : null;
+    const fallback = point.clone().project(this.player.camera);
+    const x = overhead?.x ?? (fallback.x * 0.5 + 0.5) * 100;
+    const y = overhead?.y ?? (-fallback.y * 0.5 + 0.5) * 100;
     if (x >= -10 && x <= 110 && y >= -10 && y <= 110) {
       this.hud.showFloatingDamage(amount, x, y, critical);
     }
@@ -622,8 +753,8 @@ export class Game {
 
     if (action === 'menu') {
       this.hud.showMainMenu({
-        onPreparation: () => this.openPreparation(),
-        onExit: () => this.exitToIntro(),
+        onPreparation: () => this.openPreparation(true),
+        onExit: () => this.resetToFreshIntro(),
         onCheat: () => this.openCheatMenu(),
         onResume: () => this.resumeFromMainControlPanel()
       });
@@ -681,6 +812,8 @@ export class Game {
       this.setStageBackground(this.waves.stage);
       this.setupCombatantsFromPreparation();
       this.resetBarricade();
+      this.resetAim();
+      this.alignStageMapToBackground();
       this.cheatModeUsed = true;
       this.cheatJumpUsed = true;
     }
@@ -688,6 +821,7 @@ export class Game {
   }
 
   private showRankPlaceholder(): void {
+    this.audio.playRank();
     this.hud.showTopRanks(() => this.openCheatMenu());
   }
 
@@ -695,7 +829,13 @@ export class Game {
     this.mode = 'gameover';
     this.pausedControl = null;
     this.stopLivingSoldierWeaponShots();
-    this.hud.showGameOver(this.score, this.waves.stage, () => this.exitToIntro());
+    this.audio.playGameOver();
+    this.hud.showGameOver(
+      this.score,
+      this.waves.stage,
+      () => this.resetToFreshIntro(),
+      () => this.audio.playRank()
+    );
   }
 
   private exitToIntro(): void {
@@ -708,11 +848,37 @@ export class Game {
     this.showIntro();
   }
 
+  private resetToFreshIntro(): void {
+    this.mode = 'ready';
+    this.pausedControl = null;
+    this.preparationFromRun = false;
+    this.stopLivingSoldierWeaponShots();
+    document.exitPointerLock();
+    this.preparation.reset();
+    this.resetRunProgress();
+    this.resetAim();
+    this.alignStageMapToBackground();
+    this.hud.hideOverlay();
+    this.showIntro();
+  }
+
   private resumeFromMainControlPanel(): void {
     if (this.mode !== 'paused') {
       return;
     }
 
+    this.pausedControl = null;
+    this.mode = 'playing';
+    this.audio.unlock();
+    this.hud.hideOverlay();
+    void this.hud.getCanvasHost().requestPointerLock();
+  }
+
+  private resumeFromPreparation(): void {
+    this.preparationFromRun = false;
+    this.audio.unlock();
+    this.setupCombatantsFromPreparation();
+    this.alignStageMapToBackground();
     this.pausedControl = null;
     this.mode = 'playing';
     this.hud.hideOverlay();
@@ -916,6 +1082,7 @@ export class Game {
     document.exitPointerLock();
     this.hud.showUpgrades(this.upgrades.getChoices(), reward, (upgrade: Upgrade) => {
       upgrade.apply();
+      this.audio.unlock();
       this.hud.hideOverlay();
       this.waves.continueAfterUpgrade();
       this.alignStageMapToBackground();
@@ -929,12 +1096,19 @@ export class Game {
     this.stopLivingSoldierWeaponShots();
     document.exitPointerLock();
     this.upgrades.resetStageUpgrades();
-    this.hud.showStageClear(this.waves.stage, reward, () => {
+    const hasNextStage = this.waves.stage < imageAssets.stageBackgrounds.length;
+    this.hud.showStageClear(this.waves.stage, reward, hasNextStage, () => {
+      this.audio.unlock();
       this.hud.hideOverlay();
+      if (!hasNextStage) {
+        this.resetToFreshIntro();
+        return;
+      }
       this.waves.continueAfterStageClear();
       this.setStageBackground(this.waves.stage);
       this.resetBarricade();
       this.setupCombatantsFromPreparation();
+      this.resetAim();
       this.alignStageMapToBackground();
       this.mode = 'playing';
       void this.hud.getCanvasHost().requestPointerLock();
@@ -1033,9 +1207,11 @@ export class Game {
   private setStageBackground(stage: number): void {
     const assetIndex = (Math.max(1, stage) - 1) % imageAssets.stageBackgrounds.length;
     const stageNumber = assetIndex + 1;
+    this.currentStageNumber = stageNumber;
     const cached = this.stageBackgrounds.get(stageNumber);
     if (cached) {
       this.scene.background = cached;
+      this.loadStageRoadProfile(stageNumber);
       return;
     }
 
@@ -1043,5 +1219,15 @@ export class Game {
     texture.colorSpace = SRGBColorSpace;
     this.stageBackgrounds.set(stageNumber, texture);
     this.scene.background = texture;
+    this.loadStageRoadProfile(stageNumber);
+  }
+
+  private loadStageRoadProfile(stageNumber: number): void {
+    void this.roadMaskLoader.load(stageNumber, true).then(profile => {
+      if (this.currentStageNumber !== stageNumber) return;
+      this.stageRoadProfile = profile;
+      this.waves.setRoadProfile(profile);
+      this.alignStageMapToBackground();
+    });
   }
 }

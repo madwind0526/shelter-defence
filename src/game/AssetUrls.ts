@@ -1,14 +1,22 @@
 export const imageAssets = {
-  stage1Background: new URL('../../assets/images/stages/stage1-background.jpeg', import.meta.url)
-    .href,
+  stage1Background: new URL('../../assets/images/stages-bg/bg1.jpg', import.meta.url).href,
   stageBackgrounds: [
-    new URL('../../assets/images/stages/stage1-background.jpeg', import.meta.url).href,
-    new URL('../../assets/images/stages/stage2-background.jpeg', import.meta.url).href,
-    new URL('../../assets/images/stages/stage3-background.jpeg', import.meta.url).href,
-    new URL('../../assets/images/stages/stage4-background.jpeg', import.meta.url).href,
-    new URL('../../assets/images/stages/stage5-background.jpeg', import.meta.url).href,
-    new URL('../../assets/images/stages/stage6-background.jpeg', import.meta.url).href
+    new URL('../../assets/images/stages-bg/bg1.jpg', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg2.jpg', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg3.jpg', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg4.jpg', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg5.jpg', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg6.jpg', import.meta.url).href
   ],
+  stageRoadMasks: [
+    new URL('../../assets/images/stages-bg/bg1-road.png', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg2-road.png', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg3-road.png', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg4-road.png', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg5-road.png', import.meta.url).href,
+    new URL('../../assets/images/stages-bg/bg6-road.png', import.meta.url).href
+  ],
+  nextStage: new URL('../../assets/images/NextStage.png', import.meta.url).href,
   gameOver: new URL('../../assets/images/GameOver.png', import.meta.url).href,
   topRanks: new URL('../../assets/images/TopRanks.png', import.meta.url).href,
   barricadeBlock: new URL('../../assets/images/stages/barricade-block.png', import.meta.url)
@@ -19,10 +27,6 @@ export const imageAssets = {
     '../../assets/images/Stylized_firearm_icons_game.jpeg',
     import.meta.url
   ).href,
-  itemBomb: new URL('../../assets/images/item-bomb.png', import.meta.url).href,
-  itemRocket: new URL('../../assets/images/item-rocket.png', import.meta.url).href,
-  itemShield: new URL('../../assets/images/item-shield.png', import.meta.url).href,
-  itemSlow: new URL('../../assets/images/item-slow.png', import.meta.url).href,
   heartFilled: new URL('../../assets/images/heart-filled.png', import.meta.url)
     .href
 };

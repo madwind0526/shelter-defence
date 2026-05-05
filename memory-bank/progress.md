@@ -671,6 +671,52 @@
 - Increased mid boss and big boss health/damage multipliers by 10x over the previous values.
 - Verified with `npm run build`; build succeeds with the existing chunk-size warning.
 
+### Main Feedback, Sound, And Stage Alignment Polish
+
+- Changed Power Shot damage popups to display `+∞`.
+- Moved normal and critical damage popups to the zombie overhead position instead of the hit point.
+- Removed floating kill Gold text while keeping random Score/Gold rewards.
+- Changed the upgrade overlay title to `CHOOSE A CARD` and kept the reward line centered.
+- Re-unlocked audio after upgrade/stage/menu resume and stopped interrupted audio playback from disabling later shot sounds.
+- Added `STAGE N` to the main wave title before `WAVES`.
+- Shifted first-person weapon formation slots 1, 2, and 3 toward the center while leaving slots 4 and 5 unchanged.
+- Reset aim/view alignment when entering a new stage or jumping stages so the map and stage background start from the same baseline.
+- Verified with `npm run build`; build succeeds with the existing chunk-size warning.
+
+### Stage Road Mask Calibration
+
+- Switched gameplay stage backgrounds to the new `assets/images/stages-bg/bg1.jpg` through `bg6.jpg` files.
+- Added road mask references for `bg1-road.png` through `bg6-road.png`.
+- Added `src/game/StageRoadMask.ts` to read black road pixels from each mask and derive normalized road top, center, road width, and lane half-width.
+- Connected the mask-derived road top to stage view alignment so the 3D map/spawn far line is pitched to each background's road start.
+- Connected the mask-derived lane width to `WaveManager`, so zombie spawn X bounds are based on the current stage road mask instead of one fixed lane width.
+- Verified with `npm run build`; build succeeds with the existing chunk-size warning.
+
+### Menu Reset, Rank Frame, And Flow Sounds
+
+- Removed the small `Menu` eyebrow text from the F1 MENU overlay.
+- Added a full fresh-reset path for F1 EXIT:
+  - Resets Preparation gold/rubi, hired soldiers, turret slots, item counts, selected weapon/soldier, message, score, waves, barricade, specials, cheats, weapon modifiers, active enemies, and turret combat state.
+  - Returns to the intro screen as if the game has just started.
+- Changed F1 STORE so returning with Start Game resumes the existing run state instead of starting over.
+- Added UI sound playback for:
+  - `GameStart.mp3` on intro/title screen.
+  - `GameOver.mp3` when GameOver appears.
+  - `Rank.mp3` when Top Rank opens.
+- Added `NextStage.png` to the Stage Clear panel.
+- Changed Stage 6 clear to return to a fresh intro instead of wrapping to a missing next stage.
+- Wrapped the Top Rank image and ranking table in a translucent panel for readability.
+- Removed unused `item-bomb`, `item-rocket`, `item-shield`, and `item-slow` asset URL references because those files are no longer present.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Team Damage, Knockback, And Road Mask Refresh
+
+- Changed zombie damage popups so rapid hits from multiple soldiers against the same zombie are summed and shown as one team-total popup.
+- Limited zombie knockback to the shotgun, Milkor MGL, and machine-gun weapon family instead of every firearm.
+- Updated stage road-mask loading to force-refresh on stage entry, allowing revised `bg3-road.png` and `bg4-road.png` masks to regenerate their stage road profiles during development.
+- Checked the revised bg3/bg4 road masks: both black road masks are readable, with road tops around the middle of the image.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
 ## Completed Features
 
 - First-person camera and mouse look.

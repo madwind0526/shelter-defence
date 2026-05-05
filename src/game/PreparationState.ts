@@ -452,6 +452,29 @@ export class PreparationState {
     this.message = 'Items reset.';
   }
 
+  reset(): void {
+    this.selectedSoldierIndex = 0;
+    this.selectedWeaponIndex = 3;
+    this.gold = 100000;
+    this.rubi = 200;
+    this.itemGoldSpent = 0;
+    this.message = 'Prepare your squad before the next wave.';
+    this.turretSlots.fill(null);
+
+    for (const soldier of this.soldiers) {
+      soldier.hired = soldier.id === REQUIRED_SOLDIER_ID;
+    }
+    this.soldiers[0].equippedWeaponId = 'colt-m1911';
+    this.soldiers[1].equippedWeaponId = 'bren-lmg';
+    this.soldiers[2].equippedWeaponId = 'mp5k';
+    this.soldiers[3].equippedWeaponId = 'm4-carbine';
+    this.soldiers[4].equippedWeaponId = 'shotgun';
+
+    for (const item of this.items) {
+      item.count = item.id === 'magazine' ? BASE_MAGAZINE_COUNT : 0;
+    }
+  }
+
   useItem(itemId: string): boolean {
     const item = this.items.find(candidate => candidate.id === itemId);
     if (!item || item.count <= 0) {

@@ -1361,6 +1361,16 @@ button {
   text-align: center;
 }
 
+.next-stage-image {
+  display: block;
+  width: min(60vw, 520px);
+  max-height: 30vh;
+  object-fit: contain;
+  filter:
+    drop-shadow(0 14px 24px rgba(0, 0, 0, 0.72))
+    drop-shadow(0 0 18px rgba(255, 239, 83, 0.3));
+}
+
 .stage-clear-panel h2,
 .stage-clear-panel p,
 .main-control-panel,
@@ -1943,7 +1953,7 @@ button {
   left: 50%;
   display: grid;
   gap: 0.62vh;
-  width: min(42vw, 620px);
+  width: min(56vw, 880px);
   height: auto;
   background: transparent;
   text-align: center;
@@ -2592,6 +2602,20 @@ button {
   filter:
     drop-shadow(0 12px 18px rgba(0, 0, 0, 0.78))
     drop-shadow(0 0 18px rgba(88, 236, 255, 0.28));
+}
+
+.top-rank-frame {
+  display: grid;
+  justify-items: center;
+  gap: clamp(12px, 1.6vh, 20px);
+  width: min(760px, 96%);
+  padding: clamp(18px, 2.4vw, 34px);
+  border: 1px solid rgba(110, 238, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(3, 11, 15, 0.74);
+  box-shadow:
+    0 22px 44px rgba(0, 0, 0, 0.45),
+    inset 0 0 26px rgba(88, 236, 255, 0.08);
 }
 
 .top-rank-list {
