@@ -209,24 +209,26 @@ export class PreparationState {
       name: 'TURRET (GUN)',
       image: characterAssets.turret1,
       kind: 'gun',
-      hireCost: 1200,
+      hireCost: 50000,
       hiredCount: 0,
-      stats: { str: 320, dex: 240, int: 180 },
-      damage: 95,
-      fireRate: 4.2,
-      maxShield: 140
+      stats: { str: 50, dex: 150, int: 100 },
+      damage: 60,
+      fireRate: 20,
+      criticalChance: 0.1,
+      maxShield: 200
     },
     {
       id: 'turret-flame',
       name: 'TURRET (FIRE)',
       image: characterAssets.turret2,
       kind: 'flame',
-      hireCost: 1500,
+      hireCost: 50000,
       hiredCount: 0,
-      stats: { str: 280, dex: 210, int: 260 },
-      damage: 72,
-      fireRate: 6,
-      maxShield: 110
+      stats: { str: 50, dex: 150, int: 100 },
+      damage: 60,
+      fireRate: 20,
+      criticalChance: 0.1,
+      maxShield: 200
     }
   ];
 

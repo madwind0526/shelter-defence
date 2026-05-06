@@ -91,6 +91,7 @@ export interface PreparationTurret {
   };
   damage: number;
   fireRate: number;
+  criticalChance: number;
   maxShield: number;
 }
 
