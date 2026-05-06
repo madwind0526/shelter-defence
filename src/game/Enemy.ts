@@ -69,6 +69,12 @@ export interface EnemyHealthBar {
 
 export type EnemyDamageResult = 'none' | 'hit' | 'killed';
 
+export interface EnemyRangeDamage {
+  enemyId: number;
+  point: Vector3;
+  result: EnemyDamageResult;
+}
+
 export interface EnemyBarricadeTarget {
   health: number;
   z: number;
@@ -265,6 +271,46 @@ export class EnemyManager {
       if (damaged >= maxTargets) break;
     }
     return damaged;
+  }
+
+  hasEnemyInRange(minZ: number): boolean {
+    for (const enemy of this.enemies.values()) {
+      if (enemy.state === 'dead') continue;
+      if (enemy.mesh.position.z >= minZ) return true;
+    }
+    return false;
+  }
+
+  damageInRange(amount: number, minZ: number, maxTargets = Number.POSITIVE_INFINITY): number {
+    let damaged = 0;
+    for (const enemy of this.enemies.values()) {
+      if (enemy.state === 'dead') continue;
+      if (enemy.mesh.position.z < minZ) continue;
+      this.damage(enemy.id, amount, false);
+      damaged += 1;
+      if (damaged >= maxTargets) break;
+    }
+    return damaged;
+  }
+
+  damageFirstInRange(amount: number, minZ: number): EnemyRangeDamage | null {
+    for (const enemy of this.enemies.values()) {
+      if (enemy.state === 'dead') continue;
+      if (enemy.mesh.position.z < minZ) continue;
+
+      const point = enemy.mesh.position.clone();
+      point.y += enemy.baseScale * 2.35;
+      const result = this.damage(enemy.id, amount, false);
+      if (result === 'none') return null;
+
+      return {
+        enemyId: enemy.id,
+        point,
+        result
+      };
+    }
+
+    return null;
   }
 
   clear(): void {

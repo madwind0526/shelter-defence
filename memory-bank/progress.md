@@ -717,6 +717,95 @@
 - Checked the revised bg3/bg4 road masks: both black road masks are readable, with road tops around the middle of the image.
 - Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
 
+### Field Turret Display And Hire Routing
+
+- Changed the active gameplay turret slot count to use `MAX_TURRET_SLOTS = 2` consistently in gameplay setup/reset and HUD rendering.
+- Enlarged lower-corner field turrets by 1.5x and flipped the right-side turret horizontally so both turrets face toward the center.
+- Added turret fire state to `TurretSnapshot`; when a turret hits an in-range zombie, the HUD briefly swaps to the on image, plays a recoil animation, and shows a muzzle flash.
+- Confirmed turret auto-fire is range-gated through `EnemyManager.hasEnemyInRange()` and `damageInRange()`, so turrets only attack zombies close enough to the barricade area.
+- Separated Preparation soldier hire and turret hire buttons/handlers, preventing the shared `.prep-hire` selector from mixing the selected soldier/turret action.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Gun Turret Only
+
+- Removed the flame turret from the Preparation turret carousel.
+- Narrowed turret type contracts and runtime/HUD branches to gun turret behavior.
+- Removed unused `turret2` image and sound URL registrations so the flame turret assets are no longer pulled in by source references.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Turret Balance And Score Layering
+
+- Raised the main Score/Gold/Rubi block above the lower-left turret sprite with an explicit z-index.
+- Reduced gun turret damage from 60 to 40, matching Stage 1 normal zombie Health 100 so normal zombies need 3 turret hits.
+- Confirmed turret attack uses `damageInRange(damage, rangeZ, 1)`, limiting each turret shot to one in-range zombie.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Turret Slot Indicator Placement
+
+- Moved the main turret slot indicator panel out from the far right and into the space between the bottom item bar and the right-side field turret.
+- Raised the turret slot indicator panel above the field turret sprite so installed/empty turret slots remain visible.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Barricade And Turret Indicator Alignment
+
+- Raised the barricade health HUD above the lower-left field turret sprite with an explicit z-index.
+- Aligned the `TURRET` indicator label with the item hotkey number row and reused the same font-size token.
+- Resized turret indicator slots to 80% of the item image height and centered them against the item image row.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Turret Range And Fire Feedback
+
+- Expanded the turret attack threshold behind the barricade line so turrets can hit zombies that are close enough to attack the barricade.
+- Reduced gun turret fireRate from 20 to 10.
+- Stopped using `turret1-on.png` as the field turret firing state; the field turret now keeps `turret1-off.png` and uses CSS recoil/muzzle-flash animation for firing feedback.
+- Removed the unused `turret1On` asset URL registration.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Special Action Vertical Position
+
+- Moved the F4/F5 special action stack upward from the screen center to roughly the midpoint between its previous position and the F1-F3 top-control icon row.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Turret Damage Feedback
+
+- Added a range-damage result path for turret attacks so the damaged enemy id and popup anchor are available after a turret hit.
+- Routed turret damage into the same pending floating-damage aggregation used by soldier shots, so soldier and turret hits on the same zombie combine into one damage number.
+- Applied Power Shooting cheat damage to turret shots as well, making turret attacks one-hit kill while the cheat is active.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Required Soldier Button State
+
+- Changed the locked Anais `Hired` button in Preparation from green to gray so it reads as a disabled required state instead of a normal hire/fire action.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Field Turret Side Order
+
+- Swapped the lower-corner field turret display order so the first installed turret renders on the right and the second installed turret renders on the left.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Field Turret On/Off Image State
+
+- Restored the main HUD `turret1-on.png` asset registration.
+- Changed lower-corner field turrets to render `turret1-off.png` while idle and `turret1-on.png` only during the hit-confirmed firing timer.
+- Shortened the field turret firing image timer from 0.16s to 0.06s so the on image can visibly turn off between rapid shots.
+- Removed the CSS muzzle/recoil firing decoration so the visible firing state comes from the turret image pair.
+- Confirmed the current gun turret `fireRate` is 10, which maps to roughly 10 shots per second in the existing cooldown logic.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Turret Fire Rate Slowdown
+
+- Reduced gun turret `fireRate` from 10 to 2, changing turret cadence from about 10 shots per second to about 2 shots per second.
+- Updated the runtime fallback turret fireRate to 2.
+- Pointed the `turret1` sound id to `assets/sounds/turret1.mp3`, which now exists as the dedicated turret sound file.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Zombie GLB Assets And Dist Save
+
+- Added candidate real zombie model assets under `assets/models/zombie/`: `zombie1.glb` and `zombie2.glb`.
+- Noted that the current assets appear to cover standing/static and walking zombie states, but not attack/death animation states.
+- Prepared a git save that explicitly includes ignored `dist/` build output at the user's request.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
 ## Completed Features
 
 - First-person camera and mouse look.

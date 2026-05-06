@@ -1,5 +1,6 @@
 import {
   BarricadeSnapshot,
+  MAX_TURRET_SLOTS,
   PreparationSnapshot,
   PreparationSoldier,
   PreparationTurret,
@@ -70,7 +71,8 @@ interface PreparationHandlers {
   onPrevWeapon: () => void;
   onNextWeapon: () => void;
   onEquipWeapon: () => void;
-  onHire: () => void;
+  onHireSoldier: () => void;
+  onHireTurret: () => void;
   onFireTurret: () => void;
   onBuyItem: (itemId: string) => void;
   onResetItems: () => void;
@@ -177,8 +179,9 @@ export class Hud {
 
         ${this.renderEnemyHealthBars(state.enemyHealthBars)}
 
+        ${this.renderMainFieldTurrets(state.turrets)}
+
         <div class="main-field-defense">
-          ${this.renderMainFieldTurrets(state.turrets)}
           <img class="main-field-barricade" src="${mainHudAssets.barricadeBlock}" alt="" />
         </div>
 
@@ -233,7 +236,7 @@ export class Hud {
     const magazineCount = magazineItemCount;
 
     return soldiers
-      .map((soldier, index) => {
+      .map((soldier) => {
         if (!soldier.hired) {
           return `
             <div class="main-soldier-row empty">
@@ -300,7 +303,7 @@ export class Hud {
   }
 
   private renderMainTurrets(turrets: TurretSnapshot[]): string {
-    return Array.from({ length: 4 }, (_, index) => {
+    return Array.from({ length: MAX_TURRET_SLOTS }, (_, index) => {
       const turret = turrets[index];
       const isInstalled = Boolean(turret?.installed);
       const shieldPercent = isInstalled
@@ -323,16 +326,18 @@ export class Hud {
   }
 
   private renderMainFieldTurrets(turrets: TurretSnapshot[]): string {
-    return Array.from({ length: 4 }, (_, index) => {
+    return Array.from({ length: MAX_TURRET_SLOTS }, (_, index) => {
       const turret = turrets[index];
       if (!turret?.installed) return '';
+      const side = index === 0 ? 'right' : 'left';
 
       return `
-        <img
-          class="main-field-turret turret-${index + 1}"
-          src="${this.getMainTurretImage(turret)}"
-          alt="${turret.name ?? ''}"
-        />
+        <span class="main-side-turret turret-side-${side}">
+          <img
+            src="${this.getMainTurretImage(turret)}"
+            alt="${turret.name ?? ''}"
+          />
+        </span>
       `;
     }).join('');
   }
@@ -367,11 +372,7 @@ export class Hud {
   }
 
   private getMainTurretImage(turret: TurretSnapshot): string {
-    const active = turret.shield > 0;
-    if (turret.kind === 'flame') {
-      return active ? mainHudAssets.turret2On : mainHudAssets.turret2Off;
-    }
-    return active ? mainHudAssets.turret1On : mainHudAssets.turret1Off;
+    return (turret.fireTimer ?? 0) > 0 ? mainHudAssets.turret1On : mainHudAssets.turret1Off;
   }
 
   private getItemCount(loadout: PreparationSnapshot, itemId: string, fallback = 0): number {
@@ -509,7 +510,7 @@ export class Hud {
             selectedTurret
               ? this.renderPreparationTurretActions(selectedTurret, state.turretSlots)
               : `
-                <button class="prep-hire${soldier?.hired ? ' fire' : ''}${isRequiredSoldier ? ' locked' : ''}" type="button"${isRequiredSoldier ? ' disabled' : ''}>
+                <button class="prep-hire prep-hire-soldier${soldier?.hired ? ' fire' : ''}${isRequiredSoldier ? ' locked' : ''}" type="button"${isRequiredSoldier ? ' disabled' : ''}>
                   ${isRequiredSoldier ? 'Hired' : soldier?.hired ? `Fire ${Math.floor((soldier?.hireCost ?? 0) / 2)}` : `Hire ${soldier?.hireCost ?? 0}`}
                 </button>
               `
@@ -606,8 +607,11 @@ export class Hud {
       .querySelector<HTMLButtonElement>('.prep-weapon-card')
       ?.addEventListener('click', handlers.onEquipWeapon, { once: true });
     this.overlay
-      .querySelector<HTMLButtonElement>('.prep-hire')
-      ?.addEventListener('click', handlers.onHire, { once: true });
+      .querySelector<HTMLButtonElement>('.prep-hire-soldier')
+      ?.addEventListener('click', handlers.onHireSoldier, { once: true });
+    this.overlay
+      .querySelector<HTMLButtonElement>('.prep-hire-turret')
+      ?.addEventListener('click', handlers.onHireTurret, { once: true });
     this.overlay
       .querySelector<HTMLButtonElement>('.prep-fire-turret')
       ?.addEventListener('click', handlers.onFireTurret, { once: true });
@@ -952,8 +956,8 @@ export class Hud {
     const canHire = totalInstalled < turretSlots.length;
     return `
       <div class="prep-turret-actions">
-        <button class="prep-hire" type="button"${canHire ? '' : ' disabled'}>
-          Hire ${turret.hireCost} (${totalInstalled}/4)
+        <button class="prep-hire prep-hire-turret" type="button"${canHire ? '' : ' disabled'}>
+          Hire ${turret.hireCost} (${totalInstalled}/${turretSlots.length})
         </button>
         <button class="prep-hire fire prep-fire-turret" type="button"${installedCount > 0 ? '' : ' disabled'}>
           Fire ${Math.floor(turret.hireCost / 2)} (${installedCount})
@@ -1039,7 +1043,7 @@ export class Hud {
 
         <div class="prep-info-block">
           <b>WEAPON</b>
-          <span>TYPE</span><em>${turret.kind === 'flame' ? 'FIRE' : 'GUN'}</em>
+          <span>TYPE</span><em>GUN</em>
           <span>STR</span><em>${turret.stats.str}</em>
           <span>DEX</span><em>${turret.stats.dex}</em>
           <span>INT</span><em>${turret.stats.int}</em>

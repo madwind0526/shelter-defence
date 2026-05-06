@@ -1,5 +1,6 @@
 import { characterAssets, itemAssets, preparationWeaponAssets } from './AssetUrls';
 import {
+  MAX_TURRET_SLOTS,
   PreparationItem,
   PreparationSnapshot,
   PreparationSoldier,
@@ -17,7 +18,7 @@ export class PreparationState {
   private rubi = 200;
   private itemGoldSpent = 0;
   private message = 'Prepare your squad before the next wave.';
-  private readonly turretSlots: Array<string | null> = [null, null, null, null];
+  private readonly turretSlots: Array<string | null> = Array(MAX_TURRET_SLOTS).fill(null);
 
   private readonly soldiers: PreparationSoldier[] = [
     {
@@ -212,21 +213,8 @@ export class PreparationState {
       hireCost: 50000,
       hiredCount: 0,
       stats: { str: 50, dex: 150, int: 100 },
-      damage: 60,
-      fireRate: 20,
-      criticalChance: 0.1,
-      maxShield: 200
-    },
-    {
-      id: 'turret-flame',
-      name: 'TURRET (FIRE)',
-      image: characterAssets.turret2,
-      kind: 'flame',
-      hireCost: 50000,
-      hiredCount: 0,
-      stats: { str: 50, dex: 150, int: 100 },
-      damage: 60,
-      fireRate: 20,
+      damage: 40,
+      fireRate: 2,
       criticalChance: 0.1,
       maxShield: 200
     }
@@ -353,7 +341,7 @@ export class PreparationState {
 
   hireSelectedSoldier(): void {
     if (!this.isSoldierSelected()) {
-      this.hireSelectedTurret();
+      this.message = 'Select a soldier to hire or fire.';
       return;
     }
 
@@ -403,7 +391,12 @@ export class PreparationState {
     this.message = `${turret.name} fired. ${refund} gold refunded.`;
   }
 
-  private hireSelectedTurret(): void {
+  hireSelectedTurret(): void {
+    if (this.isSoldierSelected()) {
+      this.message = 'Select a turret to install.';
+      return;
+    }
+
     const turret = this.currentTurret();
     const installedCount = this.turretSlots.filter(Boolean).length;
 

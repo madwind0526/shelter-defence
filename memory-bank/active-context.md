@@ -372,6 +372,48 @@ The current focus is project orientation and maintainability:
   - Enemy knockback is now limited to the shotgun, Milkor MGL, and machine-gun sound family weapons.
   - Stage road masks are force-reloaded when a stage is entered, so revised `bg3-road.png` and `bg4-road.png` files are re-analyzed without keeping stale in-memory profiles.
   - Verified the revised bg3/bg4 road masks read as black road masks; bg3 road top is about 49% and bg4 road top is about 50% of image height.
+- Latest turret placement/combat update:
+  - Main gameplay uses `MAX_TURRET_SLOTS = 2` for the lower-left and lower-right installed turret display.
+  - Field turret sprites are 1.5x larger than the previous lower-corner pass, and the right-side field turret is horizontally flipped so it faces inward.
+  - Turret auto-fire still checks for zombies within the barricade-range threshold, but now only plays sound/animation after `damageInRange` actually hits a target.
+  - Added a short turret `fireTimer` snapshot so field turrets swap to the on image, recoil, and show a muzzle flash while attacking.
+  - Split Preparation soldier hire and turret hire buttons/handlers so the carousel selection no longer routes both through one generic hire action.
+- Latest turret option cleanup:
+  - Removed the flame turret option from Preparation, leaving only `TURRET (GUN)` in the turret carousel.
+  - Simplified turret runtime behavior and UI text to gun-turret-only handling.
+  - Removed unused `turret2` image/sound registrations from the source asset registries.
+- Latest turret balance/layering update:
+  - Raised the main Score/Gold/Rubi block above the lower-left turret sprite so the turret no longer covers the text or numbers.
+  - Reduced gun turret damage from 60 to 40; Stage 1 normal zombies have 100 Health, so a normal zombie now needs 3 turret hits.
+  - Confirmed turret fire calls `damageInRange(damage, rangeZ, 1)`, so each turret shot can damage only one in-range zombie.
+  - Moved the main turret slot indicator panel between the bottom item bar and the right-side field turret, and raised it above the field turret layer.
+  - Raised the barricade health HUD above the lower-left turret sprite.
+  - Aligned the turret indicator label with the item hotkey number row and matched its font size.
+  - Resized turret indicator slot icons to 80% of the item image height and centered them against the item image row.
+  - Expanded turret attack range behind the barricade line so turrets can hit zombies that have stopped to attack the barricade.
+  - Reduced gun turret fireRate from 20 to 10.
+  - Stopped swapping between `turret1-on` and `turret1-off`; field turrets now keep the off sprite and use CSS recoil/muzzle flash for fire feedback.
+  - Moved the F4/F5 special action stack upward to about the midpoint between its old center-right position and the F1-F3 top-control icon row.
+  - Turret attacks now return the damaged enemy id and hit popup anchor, then queue damage through the same aggregated floating-damage path used by soldier shots.
+  - Soldier and turret damage against the same zombie within the aggregation window now displays as one combined damage number.
+  - Cheat Power Shooting now applies to turret attacks too, making turret shots one-hit kill when the cheat is active.
+  - Changed Anais's required locked `Hired` button in Preparation to a gray disabled treatment so it no longer looks like a normal green action button.
+- Latest field turret side-order update:
+  - Swapped the lower-corner field turret display order so the first installed turret renders on the right and the second installed turret renders on the left.
+- Latest field turret image-state update:
+  - Restored `turret1-on.png` registration for main HUD field turrets.
+  - Field turrets now render `turret1-off.png` normally and switch to `turret1-on.png` only while their hit-confirmed `fireTimer` is active.
+  - Shortened the field turret `fireTimer` from 0.16s to 0.06s so the on image does not stay continuously lit at the current firing speed.
+  - Removed the CSS muzzle/recoil firing decoration from field turrets so the firing state is driven by the on/off image asset pair.
+  - Current gun turret `fireRate` remains 10, which means roughly 10 shots per second through the existing `1 / fireRate` cooldown.
+- Latest turret fire-rate update:
+  - Reduced gun turret `fireRate` from 10 to 2, making turret shots occur about every 0.5 seconds.
+  - Updated the turret runtime fallback fireRate from 10 to 2 so missing snapshot values match the tuned default.
+  - `assets/sounds/turret1.mp3` is now present, and the `turret1` weapon sound id points to that dedicated turret sound file.
+- Latest zombie asset/git-save context:
+  - User added `assets/models/zombie/zombie1.glb` and `assets/models/zombie/zombie2.glb` as candidate real zombie 3D model assets.
+  - `zombie1.glb` is a standing/static model and `zombie2.glb` is a walking model; neither is known to include attack/death animations yet.
+  - User explicitly requested saving and pushing `dist/`, so the ignored `dist/` build output is being force-added for this commit.
 
 ## Important Current State
 
@@ -460,6 +502,19 @@ The current focus is project orientation and maintainability:
 - `npm run build` succeeded after adding road-mask based stage background alignment and lane-width calibration; Vite still reports the same chunk-size warning.
 - `npm run build` succeeded after the F1 menu reset, NextStage/GameOver/Rank audio-image flow, Top Rank frame, and stale asset reference cleanup; Vite still reports the same chunk-size warning.
 - `npm run build` succeeded after aggregating team damage popups, limiting knockback weapons, and force-reloading stage road masks; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after enlarging/flipping field turrets, adding turret fire animation, and separating Preparation soldier/turret hire handlers; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after removing the flame turret option and unused `turret2` asset/audio registrations; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after raising Score/Gold/Rubi above turrets and reducing gun turret damage to 40; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after moving the turret slot indicator panel away from the right-side field turret; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after raising the barricade HUD and aligning the turret indicator label/icons with the item bar; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after expanding turret range, halving turret fireRate, and removing turret on/off image swapping; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after moving F4/F5 special action icons upward; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after adding turret damage popups, soldier/turret damage aggregation, and Power Shooting turret one-hit behavior; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after changing the required Anais `Hired` button to gray; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after swapping the first and second field turret side order; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after restoring field turret `turret1-on/off` image switching; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after reducing gun turret fireRate to 2 and pointing `turret1` sound playback to `assets/sounds/turret1.mp3`; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded before the git-save/push step that includes `dist/`; Vite still reports the same chunk-size warning.
 
 ## Next Agent Startup Checklist
 

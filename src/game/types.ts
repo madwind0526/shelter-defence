@@ -1,5 +1,7 @@
 export type GameMode = 'ready' | 'playing' | 'upgrade' | 'gameover' | 'paused';
 
+export const MAX_TURRET_SLOTS = 2;
+
 export type UpgradeId =
   | 'damage'
   | 'fireRate'
@@ -20,7 +22,6 @@ export type WeaponSoundId =
   | 'shotgun'
   | 'laserGun'
   | 'turret1'
-  | 'turret2'
   | 'explosion'
   | 'fallingBomb';
 
@@ -81,7 +82,7 @@ export interface PreparationTurret {
   id: string;
   name: string;
   image: string;
-  kind: 'gun' | 'flame';
+  kind: 'gun';
   hireCost: number;
   hiredCount: number;
   stats: {
@@ -153,9 +154,10 @@ export interface TurretSnapshot {
   id?: string;
   name?: string;
   image?: string;
-  kind?: 'gun' | 'flame';
+  kind?: 'gun';
   damage?: number;
   fireRate?: number;
+  fireTimer?: number;
   shield: number;
   maxShield: number;
 }

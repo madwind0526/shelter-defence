@@ -58,10 +58,8 @@ export const mainHudAssets = {
   potionInt: new URL('../../assets/images/stages/potion-int.png', import.meta.url).href,
   repairKit: new URL('../../assets/images/stages/repair-kit.png', import.meta.url).href,
   turret: new URL('../../assets/images/stages/turret.png', import.meta.url).href,
-  turret1Off: new URL('../../assets/images/stages/turret1-off.png', import.meta.url).href,
   turret1On: new URL('../../assets/images/stages/turret1-on.png', import.meta.url).href,
-  turret2Off: new URL('../../assets/images/stages/turret2-off.png', import.meta.url).href,
-  turret2On: new URL('../../assets/images/stages/turret2-on.png', import.meta.url).href,
+  turret1Off: new URL('../../assets/images/stages/turret1-off.png', import.meta.url).href,
   waves: new URL('../../assets/images/stages/waves.png', import.meta.url).href
 };
 
@@ -95,8 +93,7 @@ export const characterAssets = {
   kim: new URL('../../assets/images/chars/kim.png', import.meta.url).href,
   kino: new URL('../../assets/images/chars/kino.png', import.meta.url).href,
   tomas: new URL('../../assets/images/chars/tomas.png', import.meta.url).href,
-  turret1: new URL('../../assets/images/chars/turret1.png', import.meta.url).href,
-  turret2: new URL('../../assets/images/chars/turret2.png', import.meta.url).href
+  turret1: new URL('../../assets/images/chars/turret1.png', import.meta.url).href
 };
 
 export const firstPersonWeaponAssets: Record<string, string> = {

@@ -31,6 +31,7 @@ import { WeaponView } from './WeaponView';
 import { WaveManager } from './WaveManager';
 import {
   GameMode,
+  MAX_TURRET_SLOTS,
   PreparationSnapshot,
   BarricadeSnapshot,
   PreparationSoldier,
@@ -108,6 +109,7 @@ export class Game {
   private readonly soldierCombat = new Map<string, SoldierCombatState>();
   private readonly pendingDamagePopups = new Map<number, PendingDamagePopup>();
   private readonly turretFireCooldowns = new Map<number, number>();
+  private readonly turretShotCounts = new Map<number, number>();
   private readonly barricade: BarricadeSnapshot = {
     health: 1500,
     maxHealth: 1500
@@ -121,8 +123,9 @@ export class Game {
     damage: (amount: number): void => this.damageBarricade(amount),
     owner: this
   };
-  private turrets: TurretSnapshot[] = Array.from({ length: 4 }, () => ({
+  private turrets: TurretSnapshot[] = Array.from({ length: MAX_TURRET_SLOTS }, () => ({
     installed: false,
+    fireTimer: 0,
     shield: 0,
     maxShield: 100
   }));
@@ -197,8 +200,12 @@ export class Game {
         this.preparation.equipSelectedWeapon();
         this.openPreparation(fromRun);
       },
-      onHire: () => {
+      onHireSoldier: () => {
         this.preparation.hireSelectedSoldier();
+        this.openPreparation(fromRun);
+      },
+      onHireTurret: () => {
+        this.preparation.hireSelectedTurret();
         this.openPreparation(fromRun);
       },
       onFireTurret: () => {
@@ -235,12 +242,14 @@ export class Game {
     this.soldierCombat.clear();
     this.pendingDamagePopups.clear();
     this.turretFireCooldowns.clear();
+    this.turretShotCounts.clear();
     this.resetSpecialCounters();
     this.resetBarricade();
     this.cheatModeUsed = false;
     this.cheatJumpUsed = false;
-    this.turrets = Array.from({ length: 4 }, () => ({
+    this.turrets = Array.from({ length: MAX_TURRET_SLOTS }, () => ({
       installed: false,
+      fireTimer: 0,
       shield: 0,
       maxShield: 100
     }));
@@ -597,28 +606,39 @@ export class Game {
   }
 
   private updateTurretFire(delta: number): void {
+    const rangeZ = this.barricadeTarget.z - 2.8;
+
     for (const [index, turret] of this.turrets.entries()) {
       if (!turret.installed || turret.shield <= 0) continue;
-      const cooldown = (this.turretFireCooldowns.get(index) ?? 0) - delta;
+      turret.fireTimer = Math.max(0, (turret.fireTimer ?? 0) - delta);
 
+      const cooldown = (this.turretFireCooldowns.get(index) ?? 0) - delta;
       if (cooldown > 0) {
         this.turretFireCooldowns.set(index, cooldown);
         continue;
       }
 
-      if (this.enemies.getCount() <= 0) {
-        this.turretFireCooldowns.set(index, 0);
-        continue;
-      }
+      if (!this.enemies.hasEnemyInRange(rangeZ)) continue;
 
-      const damage = turret.damage ?? (turret.kind === 'flame' ? 72 : 95);
-      const maxTargets = turret.kind === 'flame' ? 3 : 1;
-      const fireRate = turret.fireRate ?? (turret.kind === 'flame' ? 6 : 4.2);
+      const damage = this.weapon.powerShot ? 999999 : turret.damage ?? 40;
+      const fireRate = turret.fireRate ?? 2;
       const killedBefore = this.enemies.getSnapshot().killed;
-      this.enemies.damageAll(damage, maxTargets);
+      const outcome = this.enemies.damageFirstInRange(damage, rangeZ);
+      if (!outcome) continue;
+
       this.awardIndirectKills(this.enemies.getSnapshot().killed - killedBefore);
-      this.audio.playWeaponShot(turret.kind === 'flame' ? 'turret2' : 'turret1');
-      this.turretFireCooldowns.set(index, 1 / fireRate);
+      this.queueFloatingDamage(
+        outcome.enemyId,
+        outcome.point,
+        damage,
+        this.weapon.powerShot
+      );
+      this.audio.playWeaponShot('turret1');
+      turret.fireTimer = 0.06;
+
+      const shots = (this.turretShotCounts.get(index) ?? 0) + 1;
+      this.turretShotCounts.set(index, shots % 100);
+      this.turretFireCooldowns.set(index, shots % 100 === 0 ? 1.0 : 1 / fireRate);
     }
   }
 
@@ -892,6 +912,7 @@ export class Game {
     this.activeSoldierId = null;
     this.activeWeaponId = null;
     this.turretFireCooldowns.clear();
+    this.turretShotCounts.clear();
 
     const hiredSoldiers = snapshot.soldiers.filter(candidate => candidate.hired);
     this.weaponView.prepareWeapons(hiredSoldiers.map(soldier => soldier.equippedWeaponId));
@@ -922,12 +943,13 @@ export class Game {
       kind: turret?.kind,
       damage: turret?.damage,
       fireRate: turret?.fireRate,
+      fireTimer: 0,
       shield: turret?.maxShield ?? 0,
       maxShield: turret?.maxShield ?? 100
     }));
 
-    while (this.turrets.length < 4) {
-      this.turrets.push({ installed: false, shield: 0, maxShield: 100 });
+    while (this.turrets.length < MAX_TURRET_SLOTS) {
+      this.turrets.push({ installed: false, fireTimer: 0, shield: 0, maxShield: 100 });
     }
 
     this.syncActiveSoldierWeapon();

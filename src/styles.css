@@ -824,10 +824,10 @@ button {
 }
 
 .prep-hire.locked {
-  border-color: rgba(23, 144, 87, 0.34);
-  background: linear-gradient(180deg, #d7f5df, #9ed9aa);
-  color: #125731;
-  opacity: 0.92;
+  border-color: rgba(150, 158, 166, 0.48);
+  background: linear-gradient(180deg, #d9dde1, #929ba4);
+  color: #29313a;
+  opacity: 0.86;
 }
 
 .prep-turret-actions {
@@ -2109,35 +2109,36 @@ button {
   filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.48));
 }
 
-.main-field-turret {
+.main-side-turret {
   position: absolute;
-  bottom: 17%;
+  bottom: 0;
   z-index: 2;
-  width: 17%;
+  width: min(34.5vw, 435px);
+  height: auto;
+  filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.52));
+  pointer-events: none;
+  transform-origin: center bottom;
+}
+
+.main-side-turret img {
+  display: block;
+  width: 100%;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 8px 8px rgba(0, 0, 0, 0.52));
 }
 
-.main-field-turret.turret-1 {
-  left: 18%;
+.main-side-turret.turret-side-left {
+  left: 0;
 }
 
-.main-field-turret.turret-2 {
-  left: 36%;
-}
-
-.main-field-turret.turret-3 {
-  right: 36%;
-}
-
-.main-field-turret.turret-4 {
-  right: 18%;
+.main-side-turret.turret-side-right {
+  right: 0;
+  transform: scaleX(-1);
 }
 
 .main-special-stack {
   position: absolute;
-  top: 50%;
+  top: 31%;
   right: 2.4%;
   display: grid;
   gap: 1.1vh;
@@ -2246,9 +2247,11 @@ button {
   position: absolute;
   left: 4.6%;
   bottom: 26.2%;
+  z-index: 9;
   width: min(27vw, 382px);
   height: min(9.8vh, 80px);
   background: transparent;
+  pointer-events: none;
   transform: none;
 }
 
@@ -2352,9 +2355,11 @@ button {
   position: absolute;
   left: 4.6%;
   bottom: 4.5%;
+  z-index: 9;
   display: grid;
   gap: 0.15vh;
   width: min(32vw, 420px);
+  pointer-events: none;
 }
 
 .main-score span {
@@ -2416,30 +2421,48 @@ button {
 
 .main-turret-panel {
   position: absolute;
-  right: 2.9%;
+  right: clamp(280px, 19vw, 420px);
   bottom: 4.5%;
-  width: min(14.4vw, 184px);
+  z-index: 9;
+  width: min(16.5vw, 216px);
+  height: 13.7vh;
+  pointer-events: none;
 }
 
 .main-turret-panel > strong {
+  position: absolute;
+  top: 0.6vh;
+  left: 0;
+  right: 0;
   display: block;
-  margin-bottom: 0.7vh;
-  font-size: clamp(20px, 2.15vw, 32px);
+  color: #ffef53;
+  font-size: var(--main-hotkey-size);
+  line-height: 1;
   text-align: center;
-  text-shadow: 0 2px 2px #000;
+  text-shadow:
+    0 2px 2px #000,
+    0 0 6px rgba(255, 239, 83, 0.45);
 }
 
 .main-turret-grid {
+  position: absolute;
+  top: 0;
+  left: 50%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.4vh 1vw;
+  grid-template-columns: repeat(2, min(10.96vh, 92px));
+  align-items: center;
+  justify-content: center;
+  gap: min(1vw, 14px);
+  height: 13.7vh;
+  transform: translateX(-50%);
 }
 
 .main-turret-slot {
   position: relative;
   display: grid;
   place-items: center;
-  aspect-ratio: 1.2;
+  width: min(10.96vh, 92px);
+  height: min(10.96vh, 92px);
   border: 2px dashed rgba(255, 255, 255, 0.88);
   background: rgba(10, 16, 20, 0.08);
 }

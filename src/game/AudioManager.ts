@@ -16,7 +16,6 @@ const soundAssets: Record<WeaponSoundId, string> = {
   shotgun: new URL('../../assets/sounds/shotgun.mp3', import.meta.url).href,
   laserGun: new URL('../../assets/sounds/laser-gun.mp3', import.meta.url).href,
   turret1: new URL('../../assets/sounds/turret1.mp3', import.meta.url).href,
-  turret2: new URL('../../assets/sounds/turret2.mp3', import.meta.url).href,
   explosion: new URL('../../assets/sounds/explosion.mp3', import.meta.url).href,
   fallingBomb: new URL('../../assets/sounds/falling-bomb.mp3', import.meta.url)
     .href
@@ -41,7 +40,6 @@ const soundVolumes: Record<WeaponSoundId, number> = {
   shotgun: 0.46,
   laserGun: 0.32,
   turret1: 0.27,
-  turret2: 0.3,
   explosion: 0.42,
   fallingBomb: 0.36
 };
@@ -53,7 +51,7 @@ export class AudioManager {
 
   constructor() {
     for (const id of Object.keys(soundAssets) as WeaponSoundId[]) {
-      this.preload(id, ['machineGun', 'mp5k', 'turret1', 'turret2'].includes(id) ? 8 : 4);
+      this.preload(id, ['machineGun', 'mp5k', 'turret1'].includes(id) ? 8 : 4);
     }
     this.preloadEffect('reload', 3, 0.34);
     this.preloadEffect('gameStart', 1, 0.46);
