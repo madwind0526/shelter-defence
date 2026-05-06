@@ -1,16 +1,25 @@
 import {
+  AnimationClip,
+  AnimationMixer,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Group,
+  Material,
   MathUtils,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  Object3D,
   PerspectiveCamera,
   Raycaster,
   Scene,
   SphereGeometry,
   Vector3
 } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { enemyModelAssets } from './AssetUrls';
 import { EnemyDefinition, EnemySnapshot } from './types';
 
 const walkerDefinition: EnemyDefinition = {
@@ -30,7 +39,7 @@ interface Enemy {
   definition: EnemyDefinition;
   mesh: Group;
   hitMeshes: Mesh[];
-  parts: {
+  parts?: {
     body: Mesh;
     head: Mesh;
     leftArm: Mesh;
@@ -38,6 +47,11 @@ interface Enemy {
     leftLeg: Mesh;
     rightLeg: Mesh;
   };
+  visualMeshes: Mesh[];
+  visualRoot?: Object3D;
+  visualBaseY?: number;
+  visualGroundOffset?: number;
+  mixer?: AnimationMixer;
   health: number;
   baseScale: number;
   attackTimer: number;
@@ -47,12 +61,26 @@ interface Enemy {
   state: 'chasing' | 'attacking' | 'hit' | 'dead';
 }
 
+interface EnemyModelVariant {
+  id: string;
+  url: string;
+  targetMaxDimension?: number;
+  tintColor?: string;
+  groundOffset?: number;
+  template: Object3D | null;
+  animations: AnimationClip[];
+  failed: boolean;
+  visualTargetMaxDimension: number;
+}
+
 export interface EnemySpawnOptions {
   baseHealth: number;
   wave: number;
   healthMultiplier?: number;
   damageMultiplier?: number;
   sizeMultiplier?: number;
+  modelVariantId?: string;
+  modelVariantIds?: string[];
 }
 
 export interface EnemyHit {
@@ -96,8 +124,26 @@ export class EnemyManager {
   private readonly bodyGeometry = new BoxGeometry(0.82, 1.15, 0.46);
   private readonly limbGeometry = new BoxGeometry(0.25, 0.88, 0.25);
   private readonly headGeometry = new SphereGeometry(0.33, 12, 8);
+  private readonly modelHitboxGeometry = new BoxGeometry(0.95, 2.25, 0.75);
+  private readonly zombieModelTargetMaxDimension = 0.036;
+  private readonly defaultZombieVisualGroundOffset = -0.06;
+  private readonly gltfLoader = new GLTFLoader();
+  private readonly hitboxMaterial = new MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
+    depthWrite: false
+  });
+  private readonly zombieModelVariants: EnemyModelVariant[] = enemyModelAssets.zombies.map((asset) => ({
+    ...asset,
+    template: null,
+    animations: [],
+    failed: false,
+    visualTargetMaxDimension: asset.targetMaxDimension ?? this.zombieModelTargetMaxDimension
+  }));
 
-  constructor(private readonly scene: Scene) {}
+  constructor(private readonly scene: Scene) {
+    this.loadZombieModels();
+  }
 
   spawn(position: Vector3, options: EnemySpawnOptions): void {
     const healthMultiplier = options.healthMultiplier ?? 1;
@@ -114,26 +160,21 @@ export class EnemyManager {
     const id = this.nextId;
     this.nextId += 1;
 
-    const mesh = new Group();
-    const bodyMaterial = this.createMaterial('#526b47');
-    const skinMaterial = this.createMaterial('#95b66e');
-    const limbMaterial = this.createMaterial('#40533c');
-
-    const body = this.createPart(this.bodyGeometry, bodyMaterial, 0, 1.12, 0);
-    const head = this.createPart(this.headGeometry, skinMaterial, 0, 1.88, 0.02);
-    const leftArm = this.createPart(this.limbGeometry, limbMaterial, -0.62, 1.16, 0.06);
-    const rightArm = this.createPart(this.limbGeometry, limbMaterial, 0.62, 1.16, 0.06);
-    const leftLeg = this.createPart(this.limbGeometry, limbMaterial.clone(), -0.24, 0.42, 0);
-    const rightLeg = this.createPart(this.limbGeometry, limbMaterial.clone(), 0.24, 0.42, 0);
-
-    leftArm.rotation.z = 0.18;
-    rightArm.rotation.z = -0.18;
-    mesh.add(body, head, leftArm, rightArm, leftLeg, rightLeg);
+    const model = this.createEnemyModel(options.modelVariantId, options.modelVariantIds);
+    const {
+      mesh,
+      hitMeshes,
+      parts,
+      visualMeshes,
+      visualRoot,
+      visualBaseY,
+      visualGroundOffset,
+      mixer
+    } = model;
     mesh.position.copy(position);
     mesh.scale.setScalar(sizeMultiplier);
     this.scene.add(mesh);
 
-    const hitMeshes = [body, head, leftArm, rightArm, leftLeg, rightLeg];
     for (const hitMesh of hitMeshes) {
       hitMesh.name = `enemy-hit-${id}`;
       this.bodyToEnemy.set(hitMesh.uuid, id);
@@ -144,14 +185,12 @@ export class EnemyManager {
       definition,
       mesh,
       hitMeshes,
-      parts: {
-        body,
-        head,
-        leftArm,
-        rightArm,
-        leftLeg,
-        rightLeg
-      },
+      parts,
+      visualMeshes,
+      visualRoot,
+      visualBaseY,
+      visualGroundOffset,
+      mixer,
       health: definition.maxHealth,
       baseScale: sizeMultiplier,
       attackTimer: Math.random() * 0.4,
@@ -169,6 +208,7 @@ export class EnemyManager {
 
     for (const enemy of this.enemies.values()) {
       enemy.age += delta;
+      enemy.mixer?.update(delta);
 
       if (enemy.state === 'dead') {
         this.updateDeath(delta, enemy);
@@ -401,7 +441,7 @@ export class EnemyManager {
 
   private createPart(
     geometry: BufferGeometry,
-    material: MeshStandardMaterial,
+    material: Material,
     x: number,
     y: number,
     z: number
@@ -411,12 +451,213 @@ export class EnemyManager {
     return mesh;
   }
 
+  private loadZombieModels(): void {
+    for (const variant of this.zombieModelVariants) {
+      this.gltfLoader.load(
+        variant.url,
+        (gltf) => {
+          variant.template = gltf.scene;
+          variant.animations = gltf.animations;
+        },
+        undefined,
+        () => {
+          variant.failed = true;
+        }
+      );
+    }
+  }
+
+  private createEnemyModel(modelVariantId?: string, modelVariantIds?: string[]): {
+    mesh: Group;
+    hitMeshes: Mesh[];
+    parts?: Enemy['parts'];
+    visualMeshes: Mesh[];
+    visualRoot?: Object3D;
+    visualBaseY?: number;
+    visualGroundOffset?: number;
+    mixer?: AnimationMixer;
+  } {
+    const variant = this.pickZombieModelVariant(modelVariantId, modelVariantIds);
+    if (variant) {
+      return this.createGltfEnemyModel(variant);
+    }
+
+    return this.createFallbackEnemyModel();
+  }
+
+  private pickZombieModelVariant(
+    modelVariantId?: string,
+    modelVariantIds?: string[]
+  ): EnemyModelVariant | null {
+    const loadedVariants = this.zombieModelVariants.filter(
+      (variant) => variant.template && !variant.failed
+    );
+    if (loadedVariants.length === 0) return null;
+
+    if (modelVariantId) {
+      return loadedVariants.find((variant) => variant.id === modelVariantId) ?? null;
+    }
+
+    const allowedVariants =
+      modelVariantIds && modelVariantIds.length > 0
+        ? loadedVariants.filter((variant) => modelVariantIds.includes(variant.id))
+        : loadedVariants;
+    if (allowedVariants.length === 0) return null;
+
+    return allowedVariants[Math.floor(Math.random() * allowedVariants.length)];
+  }
+
+  private createGltfEnemyModel(variant: EnemyModelVariant): {
+    mesh: Group;
+    hitMeshes: Mesh[];
+    visualMeshes: Mesh[];
+    visualRoot: Object3D;
+    visualBaseY: number;
+    visualGroundOffset: number;
+    mixer?: AnimationMixer;
+  } {
+    const mesh = new Group();
+    const visualRoot = cloneSkeleton(variant.template as Object3D);
+    const visualMeshes = this.prepareZombieVisual(
+      visualRoot,
+      variant.visualTargetMaxDimension,
+      variant.tintColor
+    );
+    const visualBaseY = visualRoot.position.y;
+    const visualGroundOffset = variant.groundOffset ?? this.defaultZombieVisualGroundOffset;
+    mesh.add(visualRoot);
+
+    const hitbox = this.createPart(
+      this.modelHitboxGeometry,
+      this.hitboxMaterial,
+      0,
+      1.12,
+      0
+    );
+    mesh.add(hitbox);
+
+    let mixer: AnimationMixer | undefined;
+    if (variant.animations.length > 0) {
+      mixer = new AnimationMixer(visualRoot);
+      mixer.clipAction(variant.animations[0]).play();
+    }
+
+    return {
+      mesh,
+      hitMeshes: [hitbox],
+      visualMeshes,
+      visualRoot,
+      visualBaseY,
+      visualGroundOffset,
+      mixer
+    };
+  }
+
+  private createFallbackEnemyModel(): {
+    mesh: Group;
+    hitMeshes: Mesh[];
+    parts: NonNullable<Enemy['parts']>;
+    visualMeshes: Mesh[];
+  } {
+    const mesh = new Group();
+    const bodyMaterial = this.createMaterial('#526b47');
+    const skinMaterial = this.createMaterial('#95b66e');
+    const limbMaterial = this.createMaterial('#40533c');
+
+    const body = this.createPart(this.bodyGeometry, bodyMaterial, 0, 1.12, 0);
+    const head = this.createPart(this.headGeometry, skinMaterial, 0, 1.88, 0.02);
+    const leftArm = this.createPart(this.limbGeometry, limbMaterial, -0.62, 1.16, 0.06);
+    const rightArm = this.createPart(this.limbGeometry, limbMaterial, 0.62, 1.16, 0.06);
+    const leftLeg = this.createPart(this.limbGeometry, limbMaterial.clone(), -0.24, 0.42, 0);
+    const rightLeg = this.createPart(this.limbGeometry, limbMaterial.clone(), 0.24, 0.42, 0);
+
+    leftArm.rotation.z = 0.18;
+    rightArm.rotation.z = -0.18;
+    mesh.add(body, head, leftArm, rightArm, leftLeg, rightLeg);
+
+    const hitMeshes = [body, head, leftArm, rightArm, leftLeg, rightLeg];
+    return {
+      mesh,
+      hitMeshes,
+      visualMeshes: hitMeshes,
+      parts: {
+        body,
+        head,
+        leftArm,
+        rightArm,
+        leftLeg,
+        rightLeg
+      }
+    };
+  }
+
+  private prepareZombieVisual(
+    visualRoot: Object3D,
+    targetMaxDimension: number,
+    tintColor?: string
+  ): Mesh[] {
+    const box = new Box3().setFromObject(visualRoot);
+    const size = box.getSize(new Vector3());
+    const center = box.getCenter(new Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    const scale = maxDimension > 0 ? targetMaxDimension / maxDimension : 1;
+
+    visualRoot.scale.multiplyScalar(scale);
+    visualRoot.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+
+    const visualMeshes: Mesh[] = [];
+    visualRoot.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+
+      object.castShadow = false;
+      object.receiveShadow = false;
+      object.frustumCulled = false;
+      visualMeshes.push(object);
+
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      const clonedMaterials = materials.map((material) => {
+        const cloned = material.clone();
+        cloned.transparent = true;
+        if (tintColor) {
+          this.applyMaterialTint(cloned, tintColor);
+        }
+        return cloned;
+      });
+      object.material = Array.isArray(object.material) ? clonedMaterials : clonedMaterials[0];
+    });
+
+    return visualMeshes;
+  }
+
+  private applyMaterialTint(material: Material, tintColor: string): void {
+    const tintable = material as Material & {
+      color?: {
+        set: (color: string) => void;
+      };
+    };
+    tintable.color?.set(tintColor);
+  }
+
   private animateWalk(enemy: Enemy): void {
     const stride = Math.sin(enemy.age * 8.5) * 0.55;
     const bob = Math.abs(Math.sin(enemy.age * 8.5)) * 0.08;
 
+    if (!enemy.parts) {
+      if (enemy.visualRoot) {
+        const baseY = enemy.visualBaseY ?? 0;
+        const groundOffset = enemy.visualGroundOffset ?? this.defaultZombieVisualGroundOffset;
+        const visualBob = Math.abs(Math.sin(enemy.age * 8.5)) * 0.035;
+        enemy.visualRoot.position.y = baseY + groundOffset + visualBob;
+        enemy.visualRoot.position.z = MathUtils.lerp(enemy.visualRoot.position.z, 0, 0.18);
+        enemy.visualRoot.rotation.x = Math.sin(enemy.age * 7.5) * 0.035;
+      }
+      return;
+    }
+
     enemy.parts.body.position.y = 1.12 + bob;
+    enemy.parts.body.position.z = 0;
     enemy.parts.head.position.y = 1.88 + bob;
+    enemy.parts.head.position.z = 0.02;
     enemy.parts.leftArm.rotation.x = stride;
     enemy.parts.rightArm.rotation.x = -stride;
     enemy.parts.leftLeg.rotation.x = -stride * 0.7;
@@ -425,6 +666,15 @@ export class EnemyManager {
 
   private animateAttack(enemy: Enemy): void {
     const lunge = Math.sin(enemy.age * 14) * 0.22;
+
+    if (!enemy.parts) {
+      if (enemy.visualRoot) {
+        enemy.visualRoot.position.z = -0.12 - Math.abs(lunge) * 0.28;
+        enemy.visualRoot.rotation.x = -0.18 - Math.abs(lunge) * 0.18;
+      }
+      return;
+    }
+
     enemy.parts.body.position.z = -0.08;
     enemy.parts.head.position.z = -0.08;
     enemy.parts.leftArm.rotation.x = -1.15 + lunge;
@@ -437,10 +687,13 @@ export class EnemyManager {
     enemy.mesh.rotation.x = MathUtils.lerp(enemy.mesh.rotation.x, -1.35, 0.12);
     enemy.mesh.position.y = MathUtils.lerp(enemy.mesh.position.y, -0.42, 0.08);
 
-    for (const hitMesh of enemy.hitMeshes) {
-      const material = hitMesh.material as MeshStandardMaterial;
-      material.opacity = Math.max(0, 1 - progress * 1.25);
-      material.emissive.set('#000000');
+    for (const visualMesh of enemy.visualMeshes) {
+      this.forEachMaterial(visualMesh, (material) => {
+        material.opacity = Math.max(0, 1 - progress * 1.25);
+        if (material instanceof MeshStandardMaterial) {
+          material.emissive.set('#000000');
+        }
+      });
     }
 
     if (enemy.deathTimer <= 0) {
@@ -449,9 +702,19 @@ export class EnemyManager {
   }
 
   private applyHitFlash(enemy: Enemy, active: boolean): void {
-    for (const hitMesh of enemy.hitMeshes) {
-      const material = hitMesh.material as MeshStandardMaterial;
-      material.emissive.set(active ? '#7a1313' : '#000000');
+    for (const visualMesh of enemy.visualMeshes) {
+      this.forEachMaterial(visualMesh, (material) => {
+        if (material instanceof MeshStandardMaterial) {
+          material.emissive.set(active ? '#7a1313' : '#000000');
+        }
+      });
+    }
+  }
+
+  private forEachMaterial(mesh: Mesh, callback: (material: Material) => void): void {
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of materials) {
+      callback(material);
     }
   }
 }

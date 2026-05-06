@@ -31,6 +31,77 @@ export const imageAssets = {
     .href
 };
 
+export const enemyModelAssets = {
+  zombies: [
+    {
+      id: 'cartoon',
+      url: new URL('../../assets/models/zombie/cartoon_monster.glb', import.meta.url).href,
+      targetMaxDimension: 10 / 3,
+      tintColor: '#f2a4c8',
+      groundOffset: -0.4
+    },
+    {
+      id: 'eye',
+      url: new URL(
+        '../../assets/models/zombie/eye_monster_animation.glb',
+        import.meta.url
+      ).href,
+      targetMaxDimension: 1.5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'flyning',
+      url: new URL('../../assets/models/zombie/flyning_monster.glb', import.meta.url).href,
+      targetMaxDimension: 2.5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'single-eye',
+      url: new URL(
+        '../../assets/models/zombie/monster-single eye.glb',
+        import.meta.url
+      ).href,
+      targetMaxDimension: 5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'zombie',
+      url: new URL('../../assets/models/zombie/zombie.glb', import.meta.url).href,
+      targetMaxDimension: 3.75,
+      groundOffset: -0.4
+    },
+    {
+      id: 'slasher',
+      url: new URL(
+        '../../assets/models/zombie/zombie_monster_slasher_necromorph.glb',
+        import.meta.url
+      ).href,
+      targetMaxDimension: 0.035,
+      groundOffset: -0.4
+    },
+    {
+      id: 'zombie-p03',
+      url: new URL('../../assets/models/zombie/zombie_p03.glb', import.meta.url).href,
+      targetMaxDimension: 2.5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'walk-test',
+      url: new URL('../../assets/models/zombie/zombie_walk_test.glb', import.meta.url).href,
+      targetMaxDimension: 0.08,
+      tintColor: '#d81f1f',
+      groundOffset: -0.4
+    },
+    {
+      id: 'warrior',
+      url: new URL('../../assets/models/zombie/zombie_warrior.glb', import.meta.url).href,
+      targetMaxDimension: 0.035,
+      tintColor: '#2fb344',
+      groundOffset: -0.4
+    }
+  ]
+};
+
 export const preparationUiAssets = {
   background: new URL('../../assets/images/prep-background.jpeg', import.meta.url).href,
   gold: new URL('../../assets/images/gold.png', import.meta.url).href,

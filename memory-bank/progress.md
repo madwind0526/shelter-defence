@@ -824,6 +824,145 @@
 - Updated Repair Kit to continue repairing the barricade and also repair active turret shields.
 - Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
 
+### Zombie GLB Visual Pass
+
+- Saved the pre-zombie-rendering work in git commit `454b528`.
+- Added `enemyModelAssets.zombie` for `assets/models/zombie/zombie1.glb`.
+- Changed EnemyManager to preload and clone the GLB as the zombie visual when available.
+- Kept invisible box hitboxes for each GLB zombie so weapon raycasts, turret range damage, health bars, and kill handling remain stable.
+- Played the first GLB animation clip with `AnimationMixer` when present.
+- Added procedural attack/death handling for GLB zombies by lunging/tilting/fading the visual because the asset does not include dedicated attack/death clips.
+- Preserved the previous box-part zombie as the fallback while the GLB is loading or if loading fails.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Zombie2 Model Trial
+
+- Switched `enemyModelAssets.zombie` from `zombie1.glb` to `zombie2.glb` after the first GLB test looked visually poor in gameplay.
+- Kept the existing GLB clone, invisible hitbox, animation-mixer, and procedural attack/death handling unchanged.
+- Noted that `zombie2.glb` is around 62MB, so browser load time and build output size need visual/runtime QA.
+- Verified with `npm run build`; build succeeds with the existing chunk-size warning plus Vite's large-asset warning for the GLB.
+
+### Zombie2 Scale Normalization
+
+- Fixed oversized `zombie2.glb` rendering by changing GLB zombie visual normalization from height-only scaling to longest-bounding-box-dimension scaling.
+- This keeps low-profile or horizontally long zombie models from being enlarged until they fill the camera view.
+- Verified with `npm run build`; build succeeds with the existing chunk-size warning plus the large-asset warning for `zombie2.glb`.
+
+### Zombie2 Size Tuning
+
+- Reduced the GLB zombie visual target max dimension from `2.18` to `0.72` because `zombie2.glb` still filled the screen and showed mostly legs.
+- Left the invisible hitbox/gameplay collision dimensions unchanged so weapon raycasts, health bars, and turret targeting remain stable.
+- Verified with `npm run build`; build succeeds with the existing chunk-size warning plus the large-asset warning for `zombie2.glb`.
+
+### Necromorph Zombie Model Trial
+
+- Switched the active enemy GLB from `zombie2.glb` to `zombie_monster_slasher_necromorph.glb`.
+- Kept the GLB visual scale target at `0.72` and kept the invisible hitbox/gameplay collision dimensions unchanged.
+- Noted that the new model asset is around 4.97MB, much smaller than the previous 62MB `zombie2.glb`.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and a smaller GLB asset-size warning.
+
+### Necromorph Zombie Size Reduction
+
+- Reduced the GLB zombie visual target max dimension from `0.72` to `0.036`, matching the user's request to try 1/20 of the current visual size.
+- Left the invisible hitbox/gameplay collision dimensions unchanged so shooting, health bars, and turret targeting remain stable while testing the visual scale.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and the GLB asset-size warning.
+
+### Mixed Zombie Model Variants
+
+- Changed enemy GLB loading from a single active model to a loaded variant pool.
+- Added randomized zombie visuals using `zombie_monster_slasher_necromorph.glb`, `flyning_monster.glb`, and `eye_monster_animation.glb`.
+- Kept every variant on the same `0.036` longest-dimension visual scale target from the latest acceptable necromorph sizing.
+- Preserved the invisible hitbox/gameplay collision dimensions and the procedural attack/death handling for all GLB variants.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Stage 1 Zombie Model Review Mode
+
+- Expanded `enemyModelAssets.zombies` to all 9 current GLB files under `assets/models/zombie/`.
+- Added `modelVariantId` to `EnemySpawnOptions`.
+- Added temporary Stage 1 model-review behavior: Stage 1 now has 9 waves, each wave spawns one normal zombie using one fixed model variant in sequence.
+- Kept stages after Stage 1 on the regular 5-wave structure with randomized loaded model variants.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Eye And Flyning Visibility Test Scale
+
+- Added per-model `targetMaxDimension` support to the zombie model asset list.
+- Temporarily set `eye_monster_animation.glb` and `flyning_monster.glb` to visual target max dimension `1` because they were not visible at the shared `0.036` review size.
+- Kept all other model variants on the existing `0.036` review size.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Per-Model Zombie Review Sizing
+
+- Restored the temporary Stage 1 model-review sequence to all 9 waves after the user provided per-wave feedback.
+- Kept models 1, 4, 5, and 7 in the review order even though the user reported they are not visible at the current baseline.
+- Set model 2, `eye_monster_animation.glb`, to `targetMaxDimension: 1.5`.
+- Set model 3, `flyning_monster.glb`, to `targetMaxDimension: 2.5`.
+- Set model 6, `zombie_monster_slasher_necromorph.glb`, to `targetMaxDimension: 0.035`.
+- Set model 8, `zombie_walk_test.glb`, to `targetMaxDimension: 0.04`.
+- Set model 9, `zombie_warrior.glb`, to `targetMaxDimension: 0.035`.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Invisible Zombie Scale Probe
+
+- Temporarily raised models 1, 4, 5, and 7 to `targetMaxDimension: 10` to check whether those previously invisible GLBs render at all.
+- Affected models are `cartoon_monster.glb`, `monster-single eye.glb`, `zombie.glb`, and `zombie_p03.glb`.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### GLB Zombie Ground Alignment
+
+- Preserved each normalized GLB visual root's base Y position instead of replacing it with walk bobbing every frame.
+- Added a small `-0.06` visual-only ground offset for GLB zombies so their feet sit closer to the road.
+- Reduced the GLB procedural walk bob amplitude from `0.08` to `0.035`; the old temporary box zombie bob remains unchanged.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Zombie Review Scale And Tint
+
+- Reduced model 1, `cartoon_monster.glb`, from `targetMaxDimension: 10` to `10 / 3`.
+- Added optional per-model `tintColor` support and tinted model 1 pink with `#f2a4c8`.
+- Reduced model 4, `monster-single eye.glb`, from `targetMaxDimension: 10` to `5`.
+- Reduced model 7, `zombie_p03.glb`, from `targetMaxDimension: 10` to `2.5`.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Per-Model Zombie Ground Offset
+
+- Added optional per-model `groundOffset` support for GLB zombie variants.
+- Set models 1, 4, and 7 to `groundOffset: -0.22` because they still floated above the road compared with the other zombie models.
+- Left the default GLB ground offset at `-0.06` for the other variants.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Per-Model Zombie Ground Offset Follow-Up
+
+- Lowered models 1, 4, and 7 further from `groundOffset: -0.22` to `groundOffset: -0.4` because they still appeared above the road.
+- Left the default GLB ground offset at `-0.06` for all other variants.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Stage 1 Mixed Zombie Stress Test
+
+- Restored Stage 1 to the normal 5-wave structure.
+- Removed the temporary per-wave forced zombie model review behavior from `WaveManager`.
+- Changed Stage 1 Wave 1 to spawn 200 normal zombies using random loaded GLB variants across the 9 active zombie model assets.
+- Added a fast `0.02s` spawn interval for Stage 1 Wave 1 so many variants appear together quickly for visual overlap testing.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Zombie Model Size And Offset Tuning
+
+- Reduced model 5, `zombie.glb`, from `targetMaxDimension: 10` to `2.5`, making it one quarter of the previous visual size.
+- Set all 9 zombie GLB variants to `groundOffset: -0.4` so their feet align consistently against the road.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Zombie Model Visual Tuning
+
+- Increased model 5, `zombie.glb`, from `targetMaxDimension: 2.5` to `3.75`.
+- Increased model 8, `zombie_walk_test.glb`, from `targetMaxDimension: 0.04` to `0.08`.
+- Added red tint to model 8 and green tint to model 9, `zombie_warrior.glb`, to make the gray models easier to distinguish.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
+### Per-Wave Random Zombie Model Selection
+
+- Restored Stage 1 Wave 1 to the normal wave count by removing the temporary 200-zombie stress-test override.
+- Added per-wave zombie model selection: each wave randomly selects 3 unique model ids from the 9 active GLB variants.
+- Updated enemy spawning so each zombie chooses randomly from the current wave's selected model ids, using loaded GLB variants from that subset.
+- Verified with `npm run build`; build succeeds with the JS chunk-size warning and GLB asset-size warnings.
+
 ## Completed Features
 
 - First-person camera and mouse look.
