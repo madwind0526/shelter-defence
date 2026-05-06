@@ -414,6 +414,18 @@ The current focus is project orientation and maintainability:
   - User added `assets/models/zombie/zombie1.glb` and `assets/models/zombie/zombie2.glb` as candidate real zombie 3D model assets.
   - `zombie1.glb` is a standing/static model and `zombie2.glb` is a walking model; neither is known to include attack/death animations yet.
   - User explicitly requested saving and pushing `dist/`, so the ignored `dist/` build output is being force-added for this commit.
+- Latest turret damage update:
+  - Doubled gun turret damage from 40 to 80.
+  - Updated the runtime turret damage fallback from 40 to 80 so missing snapshot values match the tuned default.
+- Latest upgrade/item effect propagation update:
+  - Confirmed the wave-clear upgrade cards previously applied mostly through `WeaponController`/`Player`, so some effects did not reach every soldier or turret after the multi-soldier/turret systems were added.
+  - Turret attacks now use the same global damage and fire-rate upgrade multipliers as soldier attacks.
+  - The magazine upgrade now increases every soldier combat weapon magazine size and current ammo by 4, not just the active `WeaponController` definition.
+  - The max-health upgrade now increases and heals every living soldier, and also increases/repairs every active turret shield.
+  - Health Potion now heals every living soldier and repairs every active turret shield.
+  - Agility Potion now boosts fireRate for every living soldier and active turret.
+  - Intelligence Potion now raises critical chance for every living soldier and active turret; turrets now carry `criticalChance` in `TurretSnapshot`.
+  - Repair Kit still repairs the barricade and now also repairs every active turret shield.
 
 ## Important Current State
 
@@ -515,6 +527,8 @@ The current focus is project orientation and maintainability:
 - `npm run build` succeeded after restoring field turret `turret1-on/off` image switching; Vite still reports the same chunk-size warning.
 - `npm run build` succeeded after reducing gun turret fireRate to 2 and pointing `turret1` sound playback to `assets/sounds/turret1.mp3`; Vite still reports the same chunk-size warning.
 - `npm run build` succeeded before the git-save/push step that includes `dist/`; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after doubling gun turret damage to 80; Vite still reports the same chunk-size warning.
+- `npm run build` succeeded after propagating upgrade and item effects to all living soldiers and active turrets; Vite still reports the same chunk-size warning.
 
 ## Next Agent Startup Checklist
 

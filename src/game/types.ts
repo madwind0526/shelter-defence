@@ -157,6 +157,7 @@ export interface TurretSnapshot {
   kind?: 'gun';
   damage?: number;
   fireRate?: number;
+  criticalChance?: number;
   fireTimer?: number;
   shield: number;
   maxShield: number;

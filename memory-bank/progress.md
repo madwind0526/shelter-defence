@@ -806,6 +806,24 @@
 - Prepared a git save that explicitly includes ignored `dist/` build output at the user's request.
 - Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
 
+### Turret Damage Increase
+
+- Doubled gun turret damage from 40 to 80.
+- Updated the runtime fallback turret damage to 80.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
+### Upgrade And Item Propagation
+
+- Reviewed wave-clear card handling and confirmed some effects were still centered on `WeaponController`/`Player` rather than every current combatant.
+- Updated turret firing to use the same damage and fire-rate upgrade multipliers as soldier firing.
+- Updated the magazine card to increase every soldier combat weapon magazine size and current ammo.
+- Updated the max-health card to increase/heal every living soldier and increase/repair active turret shields.
+- Updated Health Potion to heal every living soldier and repair active turret shields.
+- Updated Agility Potion to boost fireRate for every living soldier and active turret.
+- Updated Intelligence Potion to raise critical chance for every living soldier and active turret.
+- Updated Repair Kit to continue repairing the barricade and also repair active turret shields.
+- Verified with `npm run build`; build succeeds with only the existing chunk-size warning.
+
 ## Completed Features
 
 - First-person camera and mouse look.

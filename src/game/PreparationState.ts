@@ -213,7 +213,7 @@ export class PreparationState {
       hireCost: 50000,
       hiredCount: 0,
       stats: { str: 50, dex: 150, int: 100 },
-      damage: 40,
+      damage: 80,
       fireRate: 2,
       criticalChance: 0.1,
       maxShield: 200

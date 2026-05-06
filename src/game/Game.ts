@@ -460,11 +460,20 @@ export class Game {
     }
 
     if (itemId === 'potion-health') {
-      this.healMostWoundedSoldier(35);
+      this.healAllCombatants(35);
+    }
+
+    if (itemId === 'potion-dex') {
+      this.boostCombatantFireRate(1.15);
+    }
+
+    if (itemId === 'potion-int') {
+      this.boostCombatantCriticalChance(0.1);
     }
 
     if (itemId === 'repair-kit') {
       this.repairBarricade(350);
+      this.repairTurrets(350);
     }
   }
 
@@ -620,8 +629,11 @@ export class Game {
 
       if (!this.enemies.hasEnemyInRange(rangeZ)) continue;
 
-      const damage = this.weapon.powerShot ? 999999 : turret.damage ?? 40;
-      const fireRate = turret.fireRate ?? 2;
+      const critical = !this.weapon.powerShot && Math.random() < (turret.criticalChance ?? 0);
+      const damage = this.weapon.powerShot
+        ? 999999
+        : (turret.damage ?? 80) * this.weapon.damageMultiplier * (critical ? 2 : 1);
+      const fireRate = (turret.fireRate ?? 2) * this.weapon.fireRateMultiplier;
       const killedBefore = this.enemies.getSnapshot().killed;
       const outcome = this.enemies.damageFirstInRange(damage, rangeZ);
       if (!outcome) continue;
@@ -631,7 +643,7 @@ export class Game {
         outcome.enemyId,
         outcome.point,
         damage,
-        this.weapon.powerShot
+        this.weapon.powerShot || critical
       );
       this.audio.playWeaponShot('turret1');
       turret.fireTimer = 0.06;
@@ -721,12 +733,36 @@ export class Game {
     }
   }
 
-  private healMostWoundedSoldier(amount: number): void {
-    const target = this.getAliveSoldiers()
-      .filter(soldier => soldier.health < soldier.maxHealth)
-      .sort((a, b) => a.health / a.maxHealth - b.health / b.maxHealth)[0];
-    if (!target) return;
-    target.health = Math.min(target.maxHealth, target.health + amount);
+  private healAllCombatants(amount: number): void {
+    for (const soldier of this.getAliveSoldiers()) {
+      soldier.health = Math.min(soldier.maxHealth, soldier.health + amount);
+    }
+    this.repairTurrets(amount);
+  }
+
+  private boostCombatantFireRate(multiplier: number): void {
+    for (const soldier of this.getAliveSoldiers()) {
+      soldier.definition.fireRate *= multiplier;
+    }
+    for (const turret of this.turrets) {
+      if (!turret.installed || turret.shield <= 0) continue;
+      turret.fireRate = (turret.fireRate ?? 2) * multiplier;
+    }
+    this.refreshActiveWeaponDefinition();
+  }
+
+  private boostCombatantCriticalChance(amount: number): void {
+    for (const soldier of this.getAliveSoldiers()) {
+      soldier.definition.criticalChance = Math.min(
+        0.95,
+        soldier.definition.criticalChance + amount
+      );
+    }
+    for (const turret of this.turrets) {
+      if (!turret.installed || turret.shield <= 0) continue;
+      turret.criticalChance = Math.min(0.95, (turret.criticalChance ?? 0) + amount);
+    }
+    this.refreshActiveWeaponDefinition();
   }
 
   private damageBarricade(amount: number): void {
@@ -738,6 +774,13 @@ export class Game {
       this.barricade.maxHealth,
       this.barricade.health + amount
     );
+  }
+
+  private repairTurrets(amount: number): void {
+    for (const turret of this.turrets) {
+      if (!turret.installed) continue;
+      turret.shield = Math.min(turret.maxShield, turret.shield + amount);
+    }
   }
 
   private handleMainControlHotkeys(): void {
@@ -943,6 +986,7 @@ export class Game {
       kind: turret?.kind,
       damage: turret?.damage,
       fireRate: turret?.fireRate,
+      criticalChance: turret?.criticalChance,
       fireTimer: 0,
       shield: turret?.maxShield ?? 0,
       maxShield: turret?.maxShield ?? 100
@@ -1003,6 +1047,13 @@ export class Game {
     this.audio.stopWeaponShots(
       this.getAliveSoldiers().map(combat => combat.definition.soundId)
     );
+  }
+
+  private refreshActiveWeaponDefinition(): void {
+    const active = this.activeSoldierId ? this.soldierCombat.get(this.activeSoldierId) : null;
+    if (!active) return;
+    this.weapon.definition = { ...active.definition };
+    this.weapon.ammo = active.ammo;
   }
 
   private isSoldierAlive(soldierId: string): boolean {
@@ -1086,6 +1137,30 @@ export class Game {
     return reward;
   }
 
+  private applyUpgradeToCombatants(upgradeId: Upgrade['id']): void {
+    if (upgradeId === 'magazine') {
+      for (const combat of this.soldierCombat.values()) {
+        combat.definition.magazineSize += 4;
+        combat.ammo = Math.min(combat.definition.magazineSize, combat.ammo + 4);
+      }
+      this.refreshActiveWeaponDefinition();
+      return;
+    }
+
+    if (upgradeId === 'maxHealth') {
+      for (const combat of this.soldierCombat.values()) {
+        if (combat.health <= 0) continue;
+        combat.maxHealth += 18;
+        combat.health = Math.min(combat.maxHealth, combat.health + 30);
+      }
+      for (const turret of this.turrets) {
+        if (!turret.installed || turret.shield <= 0) continue;
+        turret.maxShield += 18;
+        turret.shield = Math.min(turret.maxShield, turret.shield + 30);
+      }
+    }
+  }
+
   private applyStageClearRewards(): ClearReward {
     this.applyWaveClearRewards();
     const reward = {
@@ -1104,6 +1179,7 @@ export class Game {
     document.exitPointerLock();
     this.hud.showUpgrades(this.upgrades.getChoices(), reward, (upgrade: Upgrade) => {
       upgrade.apply();
+      this.applyUpgradeToCombatants(upgrade.id);
       this.audio.unlock();
       this.hud.hideOverlay();
       this.waves.continueAfterUpgrade();
