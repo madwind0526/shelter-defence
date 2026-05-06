@@ -1366,6 +1366,7 @@ button {
   width: min(60vw, 520px);
   max-height: 30vh;
   object-fit: contain;
+  margin: 0 auto;
   filter:
     drop-shadow(0 14px 24px rgba(0, 0, 0, 0.72))
     drop-shadow(0 0 18px rgba(255, 239, 83, 0.3));
