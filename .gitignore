@@ -1,4 +1,6 @@
 node_modules/
 dist/
+memory-bank/
+.claude/
 vite.out.log
 vite.err.log

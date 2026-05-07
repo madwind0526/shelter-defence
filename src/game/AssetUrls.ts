@@ -46,13 +46,13 @@ export const enemyModelAssets = {
         '../../assets/models/zombie/eye_monster_animation.glb',
         import.meta.url
       ).href,
-      targetMaxDimension: 1.5,
+      targetMaxDimension: 3,
       groundOffset: -0.4
     },
     {
       id: 'flyning',
       url: new URL('../../assets/models/zombie/flyning_monster.glb', import.meta.url).href,
-      targetMaxDimension: 2.5,
+      targetMaxDimension: 5,
       groundOffset: -0.4
     },
     {
@@ -68,6 +68,8 @@ export const enemyModelAssets = {
       id: 'zombie',
       url: new URL('../../assets/models/zombie/zombie.glb', import.meta.url).href,
       targetMaxDimension: 3.75,
+      hitboxHeightMultiplier: 4.8,
+      overheadHeightMultiplier: 4.8,
       groundOffset: -0.4
     },
     {
@@ -77,12 +79,17 @@ export const enemyModelAssets = {
         import.meta.url
       ).href,
       targetMaxDimension: 0.035,
+      hitboxHeightMultiplier: 3.6,
+      hitboxWidthMultiplier: 2,
+      overheadHeightMultiplier: 3.6,
       groundOffset: -0.4
     },
     {
       id: 'zombie-p03',
       url: new URL('../../assets/models/zombie/zombie_p03.glb', import.meta.url).href,
       targetMaxDimension: 2.5,
+      hitboxHeightMultiplier: 1.2,
+      overheadHeightMultiplier: 1.2,
       groundOffset: -0.4
     },
     {
@@ -90,6 +97,9 @@ export const enemyModelAssets = {
       url: new URL('../../assets/models/zombie/zombie_walk_test.glb', import.meta.url).href,
       targetMaxDimension: 0.08,
       tintColor: '#d81f1f',
+      hitboxHeightMultiplier: 4.608,
+      hitboxWidthMultiplier: 4,
+      overheadHeightMultiplier: 4.608,
       groundOffset: -0.4
     },
     {
@@ -97,7 +107,47 @@ export const enemyModelAssets = {
       url: new URL('../../assets/models/zombie/zombie_warrior.glb', import.meta.url).href,
       targetMaxDimension: 0.035,
       tintColor: '#2fb344',
+      hitboxHeightMultiplier: 3.2256,
+      hitboxWidthMultiplier: 4,
+      overheadHeightMultiplier: 3.2256,
       groundOffset: -0.4
+    },
+    {
+      id: 'z-cop',
+      url: new URL(
+        '../../assets/models/zombie/z-animated_zombie_cop_running_loop.glb',
+        import.meta.url
+      ).href,
+      targetMaxDimension: 0.1,
+      hitboxHeightMultiplier: 5.1,
+      hitboxWidthMultiplier: 3.5,
+      hitboxDepthMultiplier: 0.7,
+      overheadHeightMultiplier: 5.1,
+      groundOffset: -0.4
+    },
+    {
+      id: 'z-shiny-grunt',
+      url: new URL(
+        '../../assets/models/zombie/z-shiny_flashy_grunt-walking.glb',
+        import.meta.url
+      ).href,
+      targetMaxDimension: 3.6,
+      hitboxWidthMultiplier: 0.6,
+      groundOffset: -0.62,
+      visualGroundOffset: -2.4
+    },
+    {
+      id: 'z-spider',
+      url: new URL(
+        '../../assets/models/zombie/z-spider_creepy_walking.glb',
+        import.meta.url
+      ).href,
+      targetMaxDimension: 4.5,
+      hitboxHeightMultiplier: 2 / 3,
+      hitboxWidthMultiplier: 2 / 3,
+      hitboxDepthMultiplier: 2 / 3,
+      groundOffset: -1.4,
+      visualGroundOffset: -3.1
     }
   ]
 };

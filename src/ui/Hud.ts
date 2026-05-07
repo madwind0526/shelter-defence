@@ -1,4 +1,5 @@
 import {
+  ActiveEffectSnapshot,
   BarricadeSnapshot,
   MAX_TURRET_SLOTS,
   PreparationSnapshot,
@@ -26,7 +27,7 @@ interface CheatHudState {
   infiniteAmmo: boolean;
   powerShot: boolean;
   noReload: boolean;
-  jumpUsed: boolean;
+  debugMode: boolean;
 }
 
 interface RankEntry {
@@ -58,9 +59,11 @@ interface HudState {
   barricade: BarricadeSnapshot;
   soldierHealth: SoldierHealthSnapshot[];
   enemyHealthBars: EnemyHealthBar[];
+  activeEffects: ActiveEffectSnapshot[];
   cheats: CheatHudState;
   aimX: number;
   aimY: number;
+  crosshairPulse: number;
 }
 
 interface PreparationHandlers {
@@ -102,6 +105,7 @@ export class Hud {
   private readonly stats: HTMLDivElement;
   private readonly overlay: HTMLDivElement;
   private readonly crosshair: HTMLDivElement;
+  private readonly resizeObserver: ResizeObserver | null;
 
   constructor(root: HTMLElement) {
     this.shell = document.createElement('div');
@@ -119,6 +123,14 @@ export class Hud {
 
     this.shell.append(this.stats, this.crosshair, this.overlay);
     root.append(this.shell);
+
+    this.syncShellMetrics();
+    this.resizeObserver =
+      'ResizeObserver' in window ? new ResizeObserver(() => this.syncShellMetrics()) : null;
+    this.resizeObserver?.observe(this.shell);
+    if (!this.resizeObserver) {
+      window.addEventListener('resize', () => this.syncShellMetrics());
+    }
   }
 
   getCanvasHost(): HTMLElement {
@@ -127,6 +139,16 @@ export class Hud {
 
   update(state: HudState): void {
     this.stats.innerHTML = this.renderMainHud(state);
+  }
+
+  private syncShellMetrics(): void {
+    const { width, height } = this.shell.getBoundingClientRect();
+    if (width <= 0 || height <= 0) return;
+
+    const scale = Math.min(width / 1920, height / 1080);
+    this.shell.style.setProperty('--game-width', `${width}px`);
+    this.shell.style.setProperty('--game-height', `${height}px`);
+    this.shell.style.setProperty('--game-scale', scale.toFixed(4));
   }
 
   private renderMainHud(state: HudState): string {
@@ -174,7 +196,7 @@ export class Hud {
 
         <div
           class="main-crosshair-mark"
-          style="left: ${50 + state.aimX * 50}%; top: ${50 - state.aimY * 50}%"
+          style="left: ${50 + state.aimX * 50}%; top: ${50 - state.aimY * 50}%; --crosshair-pulse: ${state.crosshairPulse.toFixed(3)}"
         ></div>
 
         ${this.renderEnemyHealthBars(state.enemyHealthBars)}
@@ -194,6 +216,7 @@ export class Hud {
         <div class="main-item-bar">
           ${this.renderMainItems(state.loadout)}
         </div>
+        ${this.renderActiveEffects(state.activeEffects)}
 
         <div class="main-score">
           <span>Score <b>${this.formatNumber(state.score)}</b></span>
@@ -222,6 +245,7 @@ export class Hud {
               class="main-enemy-health"
               style="left: ${bar.x}%; top: ${bar.y}%;"
             >
+              ${bar.label ? `<b>${bar.label}</b>` : ''}
               <i style="width: ${bar.healthPercent}%"></i>
             </span>
           `)
@@ -232,12 +256,16 @@ export class Hud {
 
   private renderMainSoldiers(state: HudState): string {
     const magazineItemCount = this.getItemCount(state.loadout, 'magazine');
-    const soldiers = state.loadout.soldiers.slice(0, 5);
+    const hiredSoldiers = state.loadout.soldiers.filter(soldier => soldier.hired).slice(0, 5);
+    const displaySoldiers: Array<PreparationSoldier | null> = [
+      ...hiredSoldiers,
+      ...Array.from({ length: Math.max(0, 5 - hiredSoldiers.length) }, () => null)
+    ];
     const magazineCount = magazineItemCount;
 
-    return soldiers
+    return displaySoldiers
       .map((soldier) => {
-        if (!soldier.hired) {
+        if (!soldier) {
           return `
             <div class="main-soldier-row empty">
               <span class="main-soldier-portrait"></span>
@@ -302,33 +330,51 @@ export class Hud {
       .join('');
   }
 
+  private renderActiveEffects(effects: ActiveEffectSnapshot[]): string {
+    if (effects.length === 0) return '';
+
+    return `
+      <div class="main-active-effects">
+        ${effects
+          .map(effect => `
+            <span class="main-active-effect" title="${effect.label}">
+              <img src="${effect.image}" alt="${effect.label}" />
+              ${typeof effect.seconds === 'number' ? `<b>${Math.ceil(effect.seconds)}</b>` : ''}
+            </span>
+          `)
+          .join('')}
+      </div>
+    `;
+  }
+
   private renderMainTurrets(turrets: TurretSnapshot[]): string {
-    return Array.from({ length: MAX_TURRET_SLOTS }, (_, index) => {
-      const turret = turrets[index];
-      const isInstalled = Boolean(turret?.installed);
-      const shieldPercent = isInstalled
-        ? Math.min(100, Math.max(0, (turret.shield / turret.maxShield) * 100))
-        : 0;
+    const installedTurrets = turrets.filter(turret => turret.installed);
+    const displayTurrets =
+      installedTurrets.length === 1
+        ? [null, installedTurrets[0]]
+        : Array.from({ length: MAX_TURRET_SLOTS }, (_, index) => turrets[index] ?? null);
+
+    return displayTurrets.map((turret) => {
+      if (!turret?.installed) {
+        return '<span class="main-turret-slot"></span>';
+      }
+
+      const shieldPercent = Math.min(
+        100,
+        Math.max(0, (turret.shield / turret.maxShield) * 100)
+      );
 
       return `
-        <span class="main-turret-slot${isInstalled ? ' ready' : ''}">
-          ${
-            isInstalled
-              ? `
-                <img class="main-turret-unit" src="${mainHudAssets.turret}" alt="${turret.name ?? ''}" />
-                <i><span style="width: ${shieldPercent}%"></span></i>
-              `
-              : ''
-          }
+        <span class="main-turret-slot ready">
+          <img class="main-turret-unit" src="${mainHudAssets.turret}" alt="${turret.name ?? ''}" />
+          <i><span style="width: ${shieldPercent}%"></span></i>
         </span>
       `;
     }).join('');
   }
 
   private renderMainFieldTurrets(turrets: TurretSnapshot[]): string {
-    return Array.from({ length: MAX_TURRET_SLOTS }, (_, index) => {
-      const turret = turrets[index];
-      if (!turret?.installed) return '';
+    return turrets.filter(turret => turret.installed).map((turret, index) => {
       const side = index === 0 ? 'right' : 'left';
 
       return `
@@ -359,7 +405,7 @@ export class Hud {
       ['Bullet', cheats.infiniteAmmo],
       ['Power', cheats.powerShot],
       ['Reload', cheats.noReload],
-      ['Jump', cheats.jumpUsed]
+      ['Debug', cheats.debugMode]
     ] as const;
 
     return `
@@ -720,12 +766,13 @@ export class Hud {
     infiniteAmmo: boolean;
     powerShot: boolean;
     noReload: boolean;
+    debugMode: boolean;
   }, handlers: {
     onInfiniteAmmo: () => void;
     onPowerShot: () => void;
     onNoReload: () => void;
     onJumpStage: () => void;
-    onRank: () => void;
+    onDebugMode: () => void;
     onBack: () => void;
   }): void {
     this.overlay.className = 'overlay visible';
@@ -738,7 +785,7 @@ export class Hud {
           <button class="cheat-power" type="button">Power Shooting: ${cheats.powerShot ? 'ON' : 'OFF'}</button>
           <button class="cheat-reload" type="button">No Reload: ${cheats.noReload ? 'ON' : 'OFF'}</button>
           <button class="cheat-stage" type="button">Jump to Stage #</button>
-          <button class="cheat-rank" type="button">Go to Rank</button>
+          <button class="cheat-debug" type="button">Debug Mode: ${cheats.debugMode ? 'ON' : 'OFF'}</button>
           <button class="cheat-back" type="button">Back</button>
         </div>
       </section>
@@ -747,7 +794,7 @@ export class Hud {
     this.overlay.querySelector<HTMLButtonElement>('.cheat-power')?.addEventListener('click', handlers.onPowerShot, { once: true });
     this.overlay.querySelector<HTMLButtonElement>('.cheat-reload')?.addEventListener('click', handlers.onNoReload, { once: true });
     this.overlay.querySelector<HTMLButtonElement>('.cheat-stage')?.addEventListener('click', handlers.onJumpStage, { once: true });
-    this.overlay.querySelector<HTMLButtonElement>('.cheat-rank')?.addEventListener('click', handlers.onRank, { once: true });
+    this.overlay.querySelector<HTMLButtonElement>('.cheat-debug')?.addEventListener('click', handlers.onDebugMode, { once: true });
     this.overlay.querySelector<HTMLButtonElement>('.cheat-back')?.addEventListener('click', handlers.onBack, { once: true });
   }
 

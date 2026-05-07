@@ -149,6 +149,13 @@ export interface WaveSnapshot {
   remaining: number;
 }
 
+export interface ActiveEffectSnapshot {
+  id: string;
+  image: string;
+  label: string;
+  seconds?: number;
+}
+
 export interface TurretSnapshot {
   installed: boolean;
   id?: string;

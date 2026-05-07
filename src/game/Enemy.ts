@@ -51,6 +51,8 @@ interface Enemy {
   visualRoot?: Object3D;
   visualBaseY?: number;
   visualGroundOffset?: number;
+  visualOverheadHeight?: number;
+  modelLabel?: string;
   mixer?: AnimationMixer;
   health: number;
   baseScale: number;
@@ -67,10 +69,16 @@ interface EnemyModelVariant {
   targetMaxDimension?: number;
   tintColor?: string;
   groundOffset?: number;
+  visualGroundOffset?: number;
+  hitboxHeightMultiplier?: number;
+  hitboxWidthMultiplier?: number;
+  hitboxDepthMultiplier?: number;
+  overheadHeightMultiplier?: number;
   template: Object3D | null;
   animations: AnimationClip[];
   failed: boolean;
   visualTargetMaxDimension: number;
+  debugName: string;
 }
 
 export interface EnemySpawnOptions {
@@ -93,6 +101,7 @@ export interface EnemyHealthBar {
   x: number;
   y: number;
   healthPercent: number;
+  label?: string;
 }
 
 export type EnemyDamageResult = 'none' | 'hit' | 'killed';
@@ -133,16 +142,21 @@ export class EnemyManager {
     opacity: 0,
     depthWrite: false
   });
-  private readonly zombieModelVariants: EnemyModelVariant[] = enemyModelAssets.zombies.map((asset) => ({
+  private readonly zombieModelVariants: EnemyModelVariant[] = enemyModelAssets.zombies.map((asset, index) => ({
     ...asset,
     template: null,
     animations: [],
     failed: false,
-    visualTargetMaxDimension: asset.targetMaxDimension ?? this.zombieModelTargetMaxDimension
+    visualTargetMaxDimension: asset.targetMaxDimension ?? this.zombieModelTargetMaxDimension,
+    debugName: `${index + 1}. ${asset.id}`
   }));
 
   constructor(private readonly scene: Scene) {
     this.loadZombieModels();
+  }
+
+  setDebugHitboxesVisible(visible: boolean): void {
+    this.hitboxMaterial.opacity = visible ? 0.5 : 0;
   }
 
   spawn(position: Vector3, options: EnemySpawnOptions): void {
@@ -169,6 +183,8 @@ export class EnemyManager {
       visualRoot,
       visualBaseY,
       visualGroundOffset,
+      visualOverheadHeight,
+      modelLabel,
       mixer
     } = model;
     mesh.position.copy(position);
@@ -190,6 +206,8 @@ export class EnemyManager {
       visualRoot,
       visualBaseY,
       visualGroundOffset,
+      visualOverheadHeight,
+      modelLabel,
       mixer,
       health: definition.maxHealth,
       baseScale: sizeMultiplier,
@@ -339,7 +357,7 @@ export class EnemyManager {
       if (enemy.mesh.position.z < minZ) continue;
 
       const point = enemy.mesh.position.clone();
-      point.y += enemy.baseScale * 2.35;
+      point.y += this.getEnemyOverheadWorldHeight(enemy);
       const result = this.damage(enemy.id, amount, false);
       if (result === 'none') return null;
 
@@ -371,7 +389,7 @@ export class EnemyManager {
     };
   }
 
-  getHealthBars(camera: PerspectiveCamera): EnemyHealthBar[] {
+  getHealthBars(camera: PerspectiveCamera, showLabels = false): EnemyHealthBar[] {
     const bars: EnemyHealthBar[] = [];
 
     for (const enemy of this.enemies.values()) {
@@ -387,7 +405,8 @@ export class EnemyManager {
         healthPercent: Math.min(
           100,
           Math.max(0, (enemy.health / enemy.definition.maxHealth) * 100)
-        )
+        ),
+        label: showLabels ? enemy.modelLabel : undefined
       });
     }
 
@@ -402,7 +421,7 @@ export class EnemyManager {
     if (!enemy) return null;
 
     const point = enemy.mesh.position.clone();
-    point.y += enemy.baseScale * 2.85;
+    point.y += this.getEnemyOverheadWorldHeight(enemy);
     const projected = point.project(camera);
 
     if (projected.z < -1 || projected.z > 1) return null;
@@ -412,6 +431,11 @@ export class EnemyManager {
     if (x < -4 || x > 104 || y < -4 || y > 104) return null;
 
     return { x, y };
+  }
+
+  private getEnemyOverheadWorldHeight(enemy: Enemy): number {
+    const localHeight = enemy.visualOverheadHeight ?? 2.85;
+    return localHeight * enemy.mesh.scale.y;
   }
 
   getCount(): number {
@@ -475,6 +499,8 @@ export class EnemyManager {
     visualRoot?: Object3D;
     visualBaseY?: number;
     visualGroundOffset?: number;
+    visualOverheadHeight?: number;
+    modelLabel?: string;
     mixer?: AnimationMixer;
   } {
     const variant = this.pickZombieModelVariant(modelVariantId, modelVariantIds);
@@ -514,25 +540,43 @@ export class EnemyManager {
     visualRoot: Object3D;
     visualBaseY: number;
     visualGroundOffset: number;
+    visualOverheadHeight: number;
+    modelLabel: string;
     mixer?: AnimationMixer;
   } {
     const mesh = new Group();
     const visualRoot = cloneSkeleton(variant.template as Object3D);
-    const visualMeshes = this.prepareZombieVisual(
+    const visual = this.prepareZombieVisual(
       visualRoot,
       variant.visualTargetMaxDimension,
       variant.tintColor
     );
+    const visualMeshes = visual.meshes;
     const visualBaseY = visualRoot.position.y;
-    const visualGroundOffset = variant.groundOffset ?? this.defaultZombieVisualGroundOffset;
+    const hitboxGroundOffset = variant.groundOffset ?? this.defaultZombieVisualGroundOffset;
+    const visualGroundOffset =
+      variant.visualGroundOffset ?? hitboxGroundOffset;
+    const baseHitboxHeight = Math.max(0.9, visual.size.y);
+    const hitboxHeight = baseHitboxHeight * (variant.hitboxHeightMultiplier ?? 1);
+    const hitboxWidth = Math.max(0.42, visual.size.x) * (variant.hitboxWidthMultiplier ?? 1);
+    const hitboxDepth = Math.max(0.42, visual.size.z) * (variant.hitboxDepthMultiplier ?? 1);
+    const visualOverheadHeight = Math.max(
+      1.2,
+      hitboxGroundOffset + baseHitboxHeight * (variant.overheadHeightMultiplier ?? 1) + 0.18
+    );
     mesh.add(visualRoot);
 
     const hitbox = this.createPart(
       this.modelHitboxGeometry,
       this.hitboxMaterial,
       0,
-      1.12,
+      hitboxGroundOffset + hitboxHeight / 2,
       0
+    );
+    hitbox.scale.set(
+      hitboxWidth / 0.95,
+      hitboxHeight / 2.25,
+      hitboxDepth / 0.75
     );
     mesh.add(hitbox);
 
@@ -549,6 +593,8 @@ export class EnemyManager {
       visualRoot,
       visualBaseY,
       visualGroundOffset,
+      visualOverheadHeight,
+      modelLabel: variant.debugName,
       mixer
     };
   }
@@ -595,12 +641,13 @@ export class EnemyManager {
     visualRoot: Object3D,
     targetMaxDimension: number,
     tintColor?: string
-  ): Mesh[] {
+  ): { meshes: Mesh[]; size: Vector3 } {
     const box = new Box3().setFromObject(visualRoot);
     const size = box.getSize(new Vector3());
     const center = box.getCenter(new Vector3());
     const maxDimension = Math.max(size.x, size.y, size.z);
     const scale = maxDimension > 0 ? targetMaxDimension / maxDimension : 1;
+    const visualSize = size.multiplyScalar(scale);
 
     visualRoot.scale.multiplyScalar(scale);
     visualRoot.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
@@ -626,7 +673,7 @@ export class EnemyManager {
       object.material = Array.isArray(object.material) ? clonedMaterials : clonedMaterials[0];
     });
 
-    return visualMeshes;
+    return { meshes: visualMeshes, size: visualSize };
   }
 
   private applyMaterialTint(material: Material, tintColor: string): void {

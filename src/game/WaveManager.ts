@@ -8,25 +8,33 @@ import { WaveSnapshot } from './types';
 type WaveState = 'none' | 'waveComplete' | 'stageComplete';
 type SpawnKind = 'normal' | 'midBoss' | 'bigBoss';
 
+interface SpawnRequest {
+  kind: SpawnKind;
+  modelVariantId?: string;
+}
+
 const DEFAULT_WAVES_PER_STAGE = 5;
 const WAVE_NORMAL_COUNTS = [20, 40, 60, 80, 100];
 const BASE_ZOMBIE_HEALTH = 100;
 const STAGE_HEALTH_MULTIPLIER = 1.5;
 const ZOMBIE_MODEL_CHOICES_PER_WAVE = 3;
 const ZOMBIE_MODEL_VARIANT_IDS = enemyModelAssets.zombies.map((asset) => asset.id);
+const DEBUG_MODEL_REVIEW_COUNT = 20;
+const DEBUG_SPAWN_INTERVAL = 1;
 
 export class WaveManager {
   wave = 0;
   stage = 1;
   waveInStage = 0;
 
-  private spawnQueue: SpawnKind[] = [];
+  private spawnQueue: SpawnRequest[] = [];
   private enemiesTotal = 0;
   private spawnTimer = 0;
   private breakTimer = 1.2;
   private awaitingContinue = false;
   private roadProfile: StageRoadProfile = defaultStageRoadProfile;
   private activeModelVariantIds: string[] = [];
+  private debugMode = false;
 
   constructor(private readonly enemies: EnemyManager) {}
 
@@ -45,6 +53,10 @@ export class WaveManager {
     this.awaitingContinue = false;
     this.roadProfile = defaultStageRoadProfile;
     this.activeModelVariantIds = [];
+  }
+
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
   }
 
   update(delta: number, player: Player): WaveState {
@@ -68,8 +80,8 @@ export class WaveManager {
 
     this.spawnTimer -= delta;
     if (this.spawnQueue.length > 0 && this.spawnTimer <= 0) {
-      const kind = this.spawnQueue.shift() ?? 'normal';
-      this.enemies.spawn(this.getSpawnPosition(player.position), this.getSpawnOptions(kind));
+      const request = this.spawnQueue.shift() ?? { kind: 'normal' };
+      this.enemies.spawn(this.getSpawnPosition(player.position), this.getSpawnOptions(request));
       this.spawnTimer = this.getSpawnInterval();
     }
 
@@ -122,28 +134,45 @@ export class WaveManager {
     this.breakTimer = 0.9;
   }
 
-  private createSpawnQueue(waveInStage: number): SpawnKind[] {
+  private createSpawnQueue(waveInStage: number): SpawnRequest[] {
+    if (this.debugMode) {
+      return this.createSequentialModelReviewQueue(DEBUG_MODEL_REVIEW_COUNT);
+    }
+
     const normalCount = WAVE_NORMAL_COUNTS[waveInStage - 1] ?? WAVE_NORMAL_COUNTS[0];
 
     if (waveInStage === 4) {
-      const firstHalf = Array.from<SpawnKind>({ length: normalCount / 2 }).fill('normal');
-      const secondHalf = Array.from<SpawnKind>({ length: normalCount / 2 }).fill('normal');
-      return [...firstHalf, 'midBoss', ...secondHalf];
+      const firstHalf = this.createNormalSpawnRequests(normalCount / 2);
+      const secondHalf = this.createNormalSpawnRequests(normalCount / 2);
+      return [...firstHalf, { kind: 'midBoss' }, ...secondHalf];
     }
 
     if (waveInStage === 5) {
       return [
-        'midBoss',
-        'midBoss',
-        ...Array.from<SpawnKind>({ length: normalCount }).fill('normal'),
-        'bigBoss'
+        { kind: 'midBoss' },
+        { kind: 'midBoss' },
+        ...this.createNormalSpawnRequests(normalCount),
+        { kind: 'bigBoss' }
       ];
     }
 
-    return Array.from<SpawnKind>({ length: normalCount }).fill('normal');
+    return this.createNormalSpawnRequests(normalCount);
   }
 
-  private getSpawnOptions(kind: SpawnKind): EnemySpawnOptions {
+  private createNormalSpawnRequests(count: number): SpawnRequest[] {
+    return Array.from({ length: count }).map(() => ({ kind: 'normal' }));
+  }
+
+  private createSequentialModelReviewQueue(countPerVariant: number): SpawnRequest[] {
+    return ZOMBIE_MODEL_VARIANT_IDS.flatMap((modelVariantId) =>
+      Array.from({ length: countPerVariant }).map(() => ({
+        kind: 'normal',
+        modelVariantId
+      }))
+    );
+  }
+
+  private getSpawnOptions(request: SpawnRequest): EnemySpawnOptions {
     const baseHealth = BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1);
     const bossScale: Record<SpawnKind, number> = {
       normal: 1,
@@ -159,14 +188,19 @@ export class WaveManager {
     return {
       baseHealth,
       wave: this.waveInStage,
-      healthMultiplier: bossScale[kind],
-      damageMultiplier: bossScale[kind],
-      sizeMultiplier: sizeScale[kind],
-      modelVariantIds: this.activeModelVariantIds
+      healthMultiplier: bossScale[request.kind],
+      damageMultiplier: bossScale[request.kind],
+      sizeMultiplier: sizeScale[request.kind],
+      modelVariantId: request.modelVariantId,
+      modelVariantIds: request.modelVariantId ? undefined : this.activeModelVariantIds
     };
   }
 
   private getSpawnInterval(): number {
+    if (this.debugMode) {
+      return DEBUG_SPAWN_INTERVAL;
+    }
+
     return MathUtils.clamp(0.55 - this.waveInStage * 0.035, 0.18, 0.55);
   }
 
@@ -187,11 +221,11 @@ export class WaveManager {
   }
 
   private getWavesPerStage(stage = this.stage): number {
-    return DEFAULT_WAVES_PER_STAGE;
+    return this.debugMode ? 1 : DEFAULT_WAVES_PER_STAGE;
   }
 
   private getGlobalWaveOffset(stage: number): number {
-    return (stage - 1) * DEFAULT_WAVES_PER_STAGE;
+    return (stage - 1) * this.getWavesPerStage(stage);
   }
 
   private getSpawnPosition(playerPosition: Vector3): Vector3 {

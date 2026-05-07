@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  BoxGeometry,
   Color,
   DirectionalLight,
   Fog,
@@ -15,7 +16,7 @@ import {
   WebGLRenderer
 } from 'three';
 import { AudioManager } from './AudioManager';
-import { imageAssets } from './AssetUrls';
+import { imageAssets, mainHudAssets } from './AssetUrls';
 import { EnemyManager } from './Enemy';
 import { Input } from './Input';
 import { Player } from './Player';
@@ -33,6 +34,7 @@ import {
   GameMode,
   MAX_TURRET_SLOTS,
   PreparationSnapshot,
+  ActiveEffectSnapshot,
   BarricadeSnapshot,
   PreparationSoldier,
   PreparationWeapon,
@@ -70,6 +72,20 @@ interface PendingDamagePopup {
   timer: number;
 }
 
+type PotionEffectId = 'potion-health' | 'potion-dex' | 'potion-int';
+
+interface PotionEffectState {
+  id: PotionEffectId;
+  label: string;
+  image: string;
+  remaining: number;
+}
+
+const POTION_EFFECT_DURATION = 10;
+const HEALTH_POTION_HEAL_PER_SECOND = 3.5;
+const DEX_POTION_FIRE_RATE_MULTIPLIER = 1.15;
+const INT_POTION_CRITICAL_BONUS = 0.1;
+
 export class Game {
   private readonly hud: Hud;
   private readonly scene = new Scene();
@@ -103,13 +119,17 @@ export class Game {
   private activeSoldierId: string | null = null;
   private activeWeaponId: string | null = null;
   private cheatModeUsed = false;
-  private cheatJumpUsed = false;
+  private debugMode = false;
   private readonly aim = new Vector2(0, 0);
   private score = 0;
   private readonly soldierCombat = new Map<string, SoldierCombatState>();
   private readonly pendingDamagePopups = new Map<number, PendingDamagePopup>();
+  private readonly activePotionEffects = new Map<PotionEffectId, PotionEffectState>();
+  private readonly activeUpgradeEffects: ActiveEffectSnapshot[] = [];
+  private readonly debugWorldMeshes: Mesh[] = [];
   private readonly turretFireCooldowns = new Map<number, number>();
   private readonly turretShotCounts = new Map<number, number>();
+  private crosshairPulseTimer = 0;
   private readonly barricade: BarricadeSnapshot = {
     health: 1500,
     maxHealth: 1500
@@ -241,12 +261,14 @@ export class Game {
     this.activeWeaponId = null;
     this.soldierCombat.clear();
     this.pendingDamagePopups.clear();
+    this.activePotionEffects.clear();
+    this.activeUpgradeEffects.length = 0;
     this.turretFireCooldowns.clear();
     this.turretShotCounts.clear();
     this.resetSpecialCounters();
     this.resetBarricade();
     this.cheatModeUsed = false;
-    this.cheatJumpUsed = false;
+    this.setDebugMode(false, false);
     this.turrets = Array.from({ length: MAX_TURRET_SLOTS }, () => ({
       installed: false,
       fireTimer: 0,
@@ -274,6 +296,7 @@ export class Game {
       this.syncActiveSoldierWeapon();
       this.updateSoldierCombatTimers(delta);
       this.updateSpecialCounters(delta);
+      this.updatePotionEffects(delta);
       this.handleGameplayHotkeys();
       this.handleSquadFire();
       this.handleShootRelease();
@@ -290,7 +313,11 @@ export class Game {
         this.openUpgradeMenu(this.applyWaveClearRewards());
       }
       if (waveState === 'stageComplete') {
-        this.openStageClearPanel(this.applyStageClearRewards());
+        if (this.debugMode) {
+          this.advanceDebugStage();
+        } else {
+          this.openStageClearPanel(this.applyStageClearRewards());
+        }
       }
 
       if (this.getAliveSoldiers().length <= 0) {
@@ -308,6 +335,7 @@ export class Game {
     }
 
     this.updateFloatingDamagePopups(delta);
+    this.crosshairPulseTimer = Math.max(0, this.crosshairPulseTimer - delta);
 
     const snapshot = this.enemies.getSnapshot();
     const preparationSnapshot = this.preparation.snapshot();
@@ -334,16 +362,18 @@ export class Game {
       turrets: this.turrets.map(turret => ({ ...turret })),
       barricade: { ...this.barricade },
       soldierHealth: this.getSoldierHealthSnapshots(preparationSnapshot),
-      enemyHealthBars: this.enemies.getHealthBars(this.player.camera),
+      enemyHealthBars: this.enemies.getHealthBars(this.player.camera, this.debugMode),
+      activeEffects: this.getActiveEffectSnapshots(preparationSnapshot),
       cheats: {
         visible: this.cheatModeUsed,
         infiniteAmmo: this.weapon.infiniteAmmo,
         powerShot: this.weapon.powerShot,
         noReload: this.weapon.noReload,
-        jumpUsed: this.cheatJumpUsed
+        debugMode: this.debugMode
       },
       aimX: this.aim.x,
-      aimY: this.aim.y
+      aimY: this.aim.y,
+      crosshairPulse: Math.min(1, this.crosshairPulseTimer / 0.16)
     });
   }
 
@@ -460,20 +490,44 @@ export class Game {
     }
 
     if (itemId === 'potion-health') {
-      this.healAllCombatants(35);
+      this.extendPotionEffect('potion-health', 'Health Potion', mainHudAssets.potionHealth);
     }
 
     if (itemId === 'potion-dex') {
-      this.boostCombatantFireRate(1.15);
+      this.extendPotionEffect('potion-dex', 'Agility Potion', mainHudAssets.potionDex);
     }
 
     if (itemId === 'potion-int') {
-      this.boostCombatantCriticalChance(0.1);
+      this.extendPotionEffect('potion-int', 'Intelligence Potion', mainHudAssets.potionInt);
     }
 
     if (itemId === 'repair-kit') {
       this.repairBarricade(350);
       this.repairTurrets(350);
+    }
+  }
+
+  private extendPotionEffect(id: PotionEffectId, label: string, image: string): void {
+    const current = this.activePotionEffects.get(id);
+    this.activePotionEffects.set(id, {
+      id,
+      label,
+      image,
+      remaining: (current?.remaining ?? 0) + POTION_EFFECT_DURATION
+    });
+  }
+
+  private updatePotionEffects(delta: number): void {
+    const healthEffect = this.activePotionEffects.get('potion-health');
+    if (healthEffect) {
+      this.healAllCombatants(HEALTH_POTION_HEAL_PER_SECOND * delta);
+    }
+
+    for (const [id, effect] of this.activePotionEffects.entries()) {
+      effect.remaining -= delta;
+      if (effect.remaining <= 0) {
+        this.activePotionEffects.delete(id);
+      }
     }
   }
 
@@ -525,6 +579,7 @@ export class Game {
     }
 
     let kicked = false;
+    let shotFired = false;
     for (const combat of this.getAliveSoldiers()) {
       if (combat.fireCooldown > 0 || combat.reloadTimer > 0) continue;
 
@@ -546,15 +601,16 @@ export class Game {
       const outcome = this.weapon.fireDefinition(
         this.player.camera,
         this.enemies,
-        combat.definition,
+        this.getEffectiveSoldierWeaponDefinition(combat.definition),
         this.weapon.damageMultiplier,
         this.weapon.powerShot,
         this.aim
       );
       combat.fireCooldown = 1 / Math.max(
         0.1,
-        combat.definition.fireRate * this.weapon.fireRateMultiplier
+        combat.definition.fireRate * this.weapon.fireRateMultiplier * this.getPotionFireRateMultiplier()
       );
+      shotFired = true;
 
       if (outcome.result !== 'none') {
         kicked = true;
@@ -587,6 +643,9 @@ export class Game {
 
     if (kicked) {
       this.weaponView.kick();
+    }
+    if (shotFired) {
+      this.crosshairPulseTimer = 0.16;
     }
   }
 
@@ -629,11 +688,16 @@ export class Game {
 
       if (!this.enemies.hasEnemyInRange(rangeZ)) continue;
 
-      const critical = !this.weapon.powerShot && Math.random() < (turret.criticalChance ?? 0);
+      const criticalChance = Math.min(
+        0.95,
+        (turret.criticalChance ?? 0) + this.getPotionCriticalBonus()
+      );
+      const critical = !this.weapon.powerShot && Math.random() < criticalChance;
       const damage = this.weapon.powerShot
         ? 999999
         : (turret.damage ?? 80) * this.weapon.damageMultiplier * (critical ? 2 : 1);
-      const fireRate = (turret.fireRate ?? 2) * this.weapon.fireRateMultiplier;
+      const fireRate =
+        (turret.fireRate ?? 2) * this.weapon.fireRateMultiplier * this.getPotionFireRateMultiplier();
       const killedBefore = this.enemies.getSnapshot().killed;
       const outcome = this.enemies.damageFirstInRange(damage, rangeZ);
       if (!outcome) continue;
@@ -740,6 +804,46 @@ export class Game {
     this.repairTurrets(amount);
   }
 
+  private getEffectiveSoldierWeaponDefinition(definition: WeaponDefinition): WeaponDefinition {
+    return {
+      ...definition,
+      fireRate: definition.fireRate * this.getPotionFireRateMultiplier(),
+      criticalChance: Math.min(0.95, definition.criticalChance + this.getPotionCriticalBonus())
+    };
+  }
+
+  private getPotionFireRateMultiplier(): number {
+    return this.activePotionEffects.has('potion-dex') ? DEX_POTION_FIRE_RATE_MULTIPLIER : 1;
+  }
+
+  private getPotionCriticalBonus(): number {
+    return this.activePotionEffects.has('potion-int') ? INT_POTION_CRITICAL_BONUS : 0;
+  }
+
+  private getActiveEffectSnapshots(snapshot: PreparationSnapshot): ActiveEffectSnapshot[] {
+    const effects: ActiveEffectSnapshot[] = [...this.activeUpgradeEffects];
+    const jacket = snapshot.items.find(item => item.id === 'jacket' && item.count > 0);
+
+    if (jacket) {
+      effects.push({
+        id: 'jacket',
+        label: jacket.name,
+        image: jacket.image
+      });
+    }
+
+    for (const effect of this.activePotionEffects.values()) {
+      effects.push({
+        id: effect.id,
+        label: effect.label,
+        image: effect.image,
+        seconds: effect.remaining
+      });
+    }
+
+    return effects;
+  }
+
   private boostCombatantFireRate(multiplier: number): void {
     for (const soldier of this.getAliveSoldiers()) {
       soldier.definition.fireRate *= multiplier;
@@ -840,7 +944,8 @@ export class Game {
       {
         infiniteAmmo: this.weapon.infiniteAmmo,
         powerShot: this.weapon.powerShot,
-        noReload: this.weapon.noReload
+        noReload: this.weapon.noReload,
+        debugMode: this.debugMode
       },
       {
         onInfiniteAmmo: () => {
@@ -859,7 +964,7 @@ export class Game {
           this.openCheatMenu();
         },
         onJumpStage: () => this.jumpToStageFromCheat(),
-        onRank: () => this.showRankPlaceholder(),
+        onDebugMode: () => this.toggleDebugModeFromCheat(),
         onBack: () => this.openMainControlPanel('menu')
       }
     );
@@ -878,14 +983,43 @@ export class Game {
       this.resetAim();
       this.alignStageMapToBackground();
       this.cheatModeUsed = true;
-      this.cheatJumpUsed = true;
     }
     this.resumeFromMainControlPanel();
   }
 
-  private showRankPlaceholder(): void {
-    this.audio.playRank();
-    this.hud.showTopRanks(() => this.openCheatMenu());
+  private toggleDebugModeFromCheat(): void {
+    this.cheatModeUsed = true;
+    this.setDebugMode(!this.debugMode, true);
+    this.openCheatMenu();
+  }
+
+  private setDebugMode(enabled: boolean, restartWave: boolean): void {
+    this.debugMode = enabled;
+    this.waves.setDebugMode(enabled);
+    this.enemies.setDebugHitboxesVisible(enabled);
+    this.setDebugWorldVisibility(enabled);
+
+    if (!restartWave) return;
+
+    this.enemies.clear();
+    this.upgrades.resetStageUpgrades();
+    this.waves.jumpToWave(this.waves.stage);
+    this.setStageBackground(this.waves.stage);
+    this.setupCombatantsFromPreparation();
+    this.resetBarricade();
+    this.resetAim();
+    this.alignStageMapToBackground();
+  }
+
+  private advanceDebugStage(): void {
+    this.enemies.clear();
+    this.upgrades.resetStageUpgrades();
+    this.waves.continueAfterStageClear();
+    this.setStageBackground(this.waves.stage);
+    this.setupCombatantsFromPreparation();
+    this.resetBarricade();
+    this.resetAim();
+    this.alignStageMapToBackground();
   }
 
   private forceGameOver(): void {
@@ -1179,6 +1313,13 @@ export class Game {
     document.exitPointerLock();
     this.hud.showUpgrades(this.upgrades.getChoices(), reward, (upgrade: Upgrade) => {
       upgrade.apply();
+      if (upgrade.icon) {
+        this.activeUpgradeEffects.push({
+          id: `upgrade-${this.activeUpgradeEffects.length}-${upgrade.id}`,
+          label: upgrade.title,
+          image: upgrade.icon
+        });
+      }
       this.applyUpgradeToCombatants(upgrade.id);
       this.audio.unlock();
       this.hud.hideOverlay();
@@ -1194,6 +1335,7 @@ export class Game {
     this.stopLivingSoldierWeaponShots();
     document.exitPointerLock();
     this.upgrades.resetStageUpgrades();
+    this.activeUpgradeEffects.length = 0;
     const hasNextStage = this.waves.stage < imageAssets.stageBackgrounds.length;
     this.hud.showStageClear(this.waves.stage, reward, hasNextStage, () => {
       this.audio.unlock();
@@ -1217,6 +1359,39 @@ export class Game {
     return Math.floor(min + Math.random() * (max - min + 1));
   }
 
+  private createDebugMaterial(color: string): MeshBasicMaterial {
+    return new MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    });
+  }
+
+  private registerDebugWorldMesh(mesh: Mesh): Mesh {
+    mesh.visible = this.debugMode;
+    this.debugWorldMeshes.push(mesh);
+    return mesh;
+  }
+
+  private setDebugWorldVisibility(visible: boolean): void {
+    for (const mesh of this.debugWorldMeshes) {
+      mesh.visible = visible;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const debugOpacity = typeof mesh.userData.debugOpacity === 'number'
+        ? mesh.userData.debugOpacity
+        : 0.5;
+      for (const material of materials) {
+        if ('opacity' in material) {
+          material.transparent = true;
+          material.opacity = visible ? debugOpacity : 0;
+          material.depthWrite = false;
+          material.needsUpdate = true;
+        }
+      }
+    }
+  }
+
   private configureRenderer(): void {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
     this.renderer.setClearColor('#111518');
@@ -1230,43 +1405,47 @@ export class Game {
 
     this.setStageBackground(1);
 
-    const floor = new Mesh(
+    const floor = this.registerDebugWorldMesh(new Mesh(
       new PlaneGeometry(84, 84),
-      new MeshBasicMaterial({
-        color: '#0d1412',
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false
-      })
-    );
+      this.createDebugMaterial('#0d1412')
+    ));
     floor.rotation.x = -Math.PI / 2;
     this.scene.add(floor);
 
-    const road = new Mesh(
+    const buildingMaterial = this.createDebugMaterial('#315879');
+    for (const x of [-23, 23]) {
+      const buildingZone = this.registerDebugWorldMesh(new Mesh(
+        new PlaneGeometry(22, 84),
+        buildingMaterial
+      ));
+      buildingZone.rotation.x = -Math.PI / 2;
+      buildingZone.position.set(x, 0.018, -11);
+      this.scene.add(buildingZone);
+    }
+
+    const road = this.registerDebugWorldMesh(new Mesh(
       new PlaneGeometry(17, 84),
-      new MeshBasicMaterial({
-        color: '#1c2424',
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false
-      })
-    );
+      this.createDebugMaterial('#1c2424')
+    ));
     road.rotation.x = -Math.PI / 2;
     road.position.set(0, 0.014, -11);
     this.scene.add(road);
 
-    const stripeMaterial = new MeshBasicMaterial({
-      color: '#d9c778',
-      transparent: true,
-      opacity: 0.5,
-      depthWrite: false
-    });
+    const stripeMaterial = this.createDebugMaterial('#d9c778');
     for (let z = -44; z < 8; z += 7) {
-      const stripe = new Mesh(new PlaneGeometry(0.26, 3.2), stripeMaterial);
+      const stripe = this.registerDebugWorldMesh(new Mesh(new PlaneGeometry(0.26, 3.2), stripeMaterial));
       stripe.rotation.x = -Math.PI / 2;
       stripe.position.set(0, 0.05, z);
       this.scene.add(stripe);
     }
+
+    const barricadeDebug = this.registerDebugWorldMesh(new Mesh(
+      new BoxGeometry(this.barricadeTarget.halfWidth * 2, 1.8, 0.35),
+      this.createDebugMaterial('#f04d4d')
+    ));
+    barricadeDebug.userData.debugOpacity = 0.2;
+    barricadeDebug.position.set(0, 0.9, this.barricadeTarget.z);
+    this.scene.add(barricadeDebug);
 
     const ambient = new AmbientLight('#d9f7ff', 0.42);
     const sun = new DirectionalLight('#fff0c9', 1.7);
