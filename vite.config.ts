@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/shelter-defence/',
+  base: process.env.VITE_BASE_PATH ?? '/shelter-defence/',
 });
