@@ -37,7 +37,6 @@ export const enemyModelAssets = {
       id: 'cartoon',
       url: new URL('../../assets/models/zombie/cartoon_monster.glb', import.meta.url).href,
       targetMaxDimension: 10 / 3,
-      tintColor: '#f2a4c8',
       groundOffset: -0.4
     },
     {
@@ -96,7 +95,6 @@ export const enemyModelAssets = {
       id: 'walk-test',
       url: new URL('../../assets/models/zombie/zombie_walk_test.glb', import.meta.url).href,
       targetMaxDimension: 0.08,
-      tintColor: '#d81f1f',
       hitboxHeightMultiplier: 4.608,
       hitboxWidthMultiplier: 4,
       overheadHeightMultiplier: 4.608,
@@ -106,7 +104,6 @@ export const enemyModelAssets = {
       id: 'warrior',
       url: new URL('../../assets/models/zombie/zombie_warrior.glb', import.meta.url).href,
       targetMaxDimension: 0.035,
-      tintColor: '#2fb344',
       hitboxHeightMultiplier: 3.2256,
       hitboxWidthMultiplier: 4,
       overheadHeightMultiplier: 3.2256,

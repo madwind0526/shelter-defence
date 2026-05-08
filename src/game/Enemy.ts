@@ -4,6 +4,8 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
+  Color,
+  LinearSRGBColorSpace,
   Group,
   Material,
   MathUtils,
@@ -15,6 +17,7 @@ import {
   Raycaster,
   Scene,
   SphereGeometry,
+  SRGBColorSpace,
   Vector3
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -79,6 +82,83 @@ interface EnemyModelVariant {
   failed: boolean;
   visualTargetMaxDimension: number;
   debugName: string;
+}
+
+interface GltfTextureInfo {
+  index: number;
+  texCoord?: number;
+  extensions?: Record<string, unknown>;
+}
+
+interface GltfMaterialDefinition {
+  extensions?: {
+    KHR_materials_pbrSpecularGlossiness?: {
+      diffuseFactor?: [number, number, number, number];
+      diffuseTexture?: GltfTextureInfo;
+      glossinessFactor?: number;
+      specularGlossinessTexture?: GltfTextureInfo;
+    };
+  };
+}
+
+interface GltfParserLike {
+  json: {
+    materials?: GltfMaterialDefinition[];
+  };
+  assignTexture: (
+    materialParams: Record<string, unknown>,
+    mapName: string,
+    mapDef: GltfTextureInfo,
+    colorSpace?: string
+  ) => Promise<unknown>;
+}
+
+class GLTFMaterialsPbrSpecularGlossinessExtension {
+  readonly name = 'KHR_materials_pbrSpecularGlossiness';
+
+  constructor(private readonly parser: GltfParserLike) {}
+
+  getMaterialType(materialIndex: number): typeof MeshStandardMaterial | null {
+    return this.getExtension(materialIndex) ? MeshStandardMaterial : null;
+  }
+
+  extendMaterialParams(
+    materialIndex: number,
+    materialParams: Record<string, unknown>
+  ): Promise<unknown> | null {
+    const extension = this.getExtension(materialIndex);
+    if (!extension) return null;
+
+    const pending: Promise<unknown>[] = [];
+    materialParams.color = new Color(1, 1, 1);
+    materialParams.opacity = 1;
+    materialParams.metalness = 0;
+    materialParams.roughness = 1 - (extension.glossinessFactor ?? 0.5);
+
+    if (extension.diffuseFactor) {
+      const [red, green, blue, alpha] = extension.diffuseFactor;
+      (materialParams.color as Color).setRGB(red, green, blue, LinearSRGBColorSpace);
+      materialParams.opacity = alpha;
+    }
+
+    if (extension.diffuseTexture) {
+      pending.push(
+        this.parser.assignTexture(
+          materialParams,
+          'map',
+          extension.diffuseTexture,
+          SRGBColorSpace
+        )
+      );
+    }
+
+    return Promise.all(pending);
+  }
+
+  private getExtension(materialIndex: number) {
+    const materialDef = this.parser.json.materials?.[materialIndex];
+    return materialDef?.extensions?.KHR_materials_pbrSpecularGlossiness;
+  }
 }
 
 export interface EnemySpawnOptions {
@@ -152,6 +232,9 @@ export class EnemyManager {
   }));
 
   constructor(private readonly scene: Scene) {
+    this.gltfLoader.register((parser) =>
+      new GLTFMaterialsPbrSpecularGlossinessExtension(parser as GltfParserLike)
+    );
     this.loadZombieModels();
   }
 
