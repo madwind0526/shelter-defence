@@ -7,6 +7,7 @@ import { WaveSnapshot } from './types';
 
 type WaveState = 'none' | 'waveComplete' | 'stageComplete';
 type SpawnKind = 'normal' | 'midBoss' | 'bigBoss';
+type WaveMode = 'stage' | 'infinite';
 
 interface SpawnRequest {
   kind: SpawnKind;
@@ -21,6 +22,10 @@ const ZOMBIE_MODEL_CHOICES_PER_WAVE = 3;
 const ZOMBIE_MODEL_VARIANT_IDS = enemyModelAssets.zombies.map((asset) => asset.id);
 const DEBUG_MODEL_REVIEW_COUNT = 20;
 const DEBUG_SPAWN_INTERVAL = 1;
+const INFINITE_BATCH_SIZE = 10;
+const INFINITE_SPAWN_INTERVAL = 3;
+const INFINITE_DIFFICULTY_INTERVAL = 60;
+const INFINITE_DIFFICULTY_MULTIPLIER = 1.2;
 
 export class WaveManager {
   wave = 0;
@@ -35,6 +40,9 @@ export class WaveManager {
   private roadProfile: StageRoadProfile = defaultStageRoadProfile;
   private activeModelVariantIds: string[] = [];
   private debugMode = false;
+  private mode: WaveMode = 'stage';
+  private infiniteElapsed = 0;
+  private infiniteModelIndex = 0;
 
   constructor(private readonly enemies: EnemyManager) {}
 
@@ -53,6 +61,9 @@ export class WaveManager {
     this.awaitingContinue = false;
     this.roadProfile = defaultStageRoadProfile;
     this.activeModelVariantIds = [];
+    this.mode = 'stage';
+    this.infiniteElapsed = 0;
+    this.infiniteModelIndex = 0;
   }
 
   setDebugMode(enabled: boolean): void {
@@ -60,6 +71,11 @@ export class WaveManager {
   }
 
   update(delta: number, player: Player): WaveState {
+    if (this.mode === 'infinite') {
+      this.updateInfinite(delta, player);
+      return 'none';
+    }
+
     if (this.awaitingContinue) {
       return 'none';
     }
@@ -101,11 +117,26 @@ export class WaveManager {
   }
 
   jumpToWave(stage: number): void {
+    this.mode = 'stage';
     this.stage = Math.max(1, Math.floor(stage));
     this.wave = this.getGlobalWaveOffset(this.stage);
     this.waveInStage = 0;
     this.awaitingContinue = false;
     this.startNextWave();
+  }
+
+  startInfiniteWar(stage: number): void {
+    this.mode = 'infinite';
+    this.stage = Math.max(1, Math.floor(stage));
+    this.wave = this.getGlobalWaveOffset(this.stage);
+    this.waveInStage = 0;
+    this.awaitingContinue = false;
+    this.spawnQueue = [];
+    this.enemiesTotal = 0;
+    this.spawnTimer = 0.15;
+    this.breakTimer = 0;
+    this.infiniteElapsed = 0;
+    this.infiniteModelIndex = 0;
   }
 
   getSnapshot(): WaveSnapshot {
@@ -115,8 +146,14 @@ export class WaveManager {
       waveInStage: this.waveInStage,
       wavesPerStage: this.getWavesPerStage(),
       total: this.enemiesTotal,
-      remaining: this.spawnQueue.length + this.enemies.getCount()
+      remaining: this.spawnQueue.length + this.enemies.getCount(),
+      infinite: this.mode === 'infinite',
+      infiniteElapsed: this.infiniteElapsed
     };
+  }
+
+  isInfiniteWar(): boolean {
+    return this.mode === 'infinite';
   }
 
   private startNextWave(): void {
@@ -172,8 +209,38 @@ export class WaveManager {
     );
   }
 
+  private updateInfinite(delta: number, player: Player): void {
+    this.infiniteElapsed += delta;
+    this.spawnTimer -= delta;
+    if (this.spawnTimer > 0) return;
+
+    for (let i = 0; i < INFINITE_BATCH_SIZE; i += 1) {
+      const request = this.createInfiniteSpawnRequest();
+      this.enemies.spawn(this.getSpawnPosition(player.position), this.getSpawnOptions(request));
+      this.enemiesTotal += 1;
+    }
+    this.spawnTimer = INFINITE_SPAWN_INTERVAL;
+  }
+
+  private createInfiniteSpawnRequest(): SpawnRequest {
+    const roll = Math.random();
+    const kind: SpawnKind = roll < 0.025 ? 'bigBoss' : roll < 0.115 ? 'midBoss' : 'normal';
+    const modelVariantId = ZOMBIE_MODEL_VARIANT_IDS[
+      this.infiniteModelIndex % Math.max(1, ZOMBIE_MODEL_VARIANT_IDS.length)
+    ];
+    this.infiniteModelIndex += 1;
+    return { kind, modelVariantId };
+  }
+
   private getSpawnOptions(request: SpawnRequest): EnemySpawnOptions {
-    const baseHealth = BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1);
+    const infiniteScale = this.mode === 'infinite'
+      ? Math.pow(
+          INFINITE_DIFFICULTY_MULTIPLIER,
+          Math.floor(this.infiniteElapsed / INFINITE_DIFFICULTY_INTERVAL)
+        )
+      : 1;
+    const baseHealth =
+      BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1) * infiniteScale;
     const bossScale: Record<SpawnKind, number> = {
       normal: 1,
       midBoss: 50,
@@ -189,7 +256,7 @@ export class WaveManager {
       baseHealth,
       wave: this.waveInStage,
       healthMultiplier: bossScale[request.kind],
-      damageMultiplier: bossScale[request.kind],
+      damageMultiplier: bossScale[request.kind] * infiniteScale,
       sizeMultiplier: sizeScale[request.kind],
       modelVariantId: request.modelVariantId,
       modelVariantIds: request.modelVariantId ? undefined : this.activeModelVariantIds

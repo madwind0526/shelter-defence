@@ -16,7 +16,7 @@ import {
   WebGLRenderer
 } from 'three';
 import { AudioManager } from './AudioManager';
-import { imageAssets, mainHudAssets } from './AssetUrls';
+import { imageAssets, mainHudAssets, upgradeAssets } from './AssetUrls';
 import { EnemyManager } from './Enemy';
 import { Input } from './Input';
 import { Player } from './Player';
@@ -351,6 +351,8 @@ export class Game {
       waveTotal: waveSnapshot.total,
       wavesPerStage: waveSnapshot.wavesPerStage,
       waveRemaining: waveSnapshot.remaining,
+      infinite: waveSnapshot.infinite,
+      infiniteElapsed: waveSnapshot.infiniteElapsed,
       kills: snapshot.killed,
       score: this.score,
       weaponName: this.weapon.definition.name,
@@ -373,7 +375,7 @@ export class Game {
       },
       aimX: this.aim.x,
       aimY: this.aim.y,
-      crosshairPulse: Math.min(1, this.crosshairPulseTimer / 0.16)
+      crosshairPulse: this.input.isShooting() ? 1 : Math.min(1, this.crosshairPulseTimer / 0.16)
     });
   }
 
@@ -723,6 +725,73 @@ export class Game {
     const goldGain = 20 + Math.floor(Math.random() * 61);
     this.score += scoreGain;
     this.preparation.addGold(goldGain);
+    this.maybeApplyInfiniteKillBuff();
+  }
+
+  private maybeApplyInfiniteKillBuff(): void {
+    if (!this.waves.isInfiniteWar() || Math.random() >= 0.05) {
+      return;
+    }
+
+    const buffs = [
+      {
+        label: 'Hot Rounds',
+        image: upgradeAssets.hotRounds,
+        apply: () => {
+          this.weapon.damageMultiplier *= 1.18;
+        }
+      },
+      {
+        label: 'Light Trigger',
+        image: upgradeAssets.lightTrigger,
+        apply: () => {
+          this.weapon.fireRateMultiplier *= 1.15;
+        }
+      },
+      {
+        label: 'Fast Hands',
+        image: upgradeAssets.fastHands,
+        apply: () => {
+          this.weapon.reloadMultiplier *= 0.86;
+        }
+      },
+      {
+        label: 'Reinforced Nest',
+        image: upgradeAssets.reinforcedNest,
+        apply: () => {
+          this.player.incomingDamageMultiplier *= 0.9;
+        }
+      },
+      {
+        label: 'Field Kit',
+        image: upgradeAssets.fieldKit,
+        apply: () => {
+          this.player.maxHealth += 18;
+          this.player.heal(30);
+          for (const combat of this.soldierCombat.values()) {
+            if (combat.health <= 0) continue;
+            combat.maxHealth += 18;
+            combat.health = Math.min(combat.maxHealth, combat.health + 30);
+          }
+          for (const turret of this.turrets) {
+            if (!turret.installed || turret.shield <= 0) continue;
+            turret.maxShield += 18;
+            turret.shield = Math.min(turret.maxShield, turret.shield + 30);
+          }
+        }
+      }
+    ];
+    const buff = buffs[this.randomInt(0, buffs.length - 1)];
+    buff.apply();
+    this.activeUpgradeEffects.push({
+      id: `infinite-${performance.now().toFixed(0)}-${buff.label}`,
+      label: `Infinite ${buff.label}`,
+      image: buff.image
+    });
+    if (this.activeUpgradeEffects.length > 10) {
+      this.activeUpgradeEffects.splice(0, this.activeUpgradeEffects.length - 10);
+    }
+    this.refreshActiveWeaponDefinition();
   }
 
   private queueFloatingDamage(
@@ -1352,7 +1421,23 @@ export class Game {
       this.alignStageMapToBackground();
       this.mode = 'playing';
       void this.hud.getCanvasHost().requestPointerLock();
-    });
+    }, hasNextStage ? undefined : () => this.startInfiniteWar());
+  }
+
+  private startInfiniteWar(): void {
+    this.audio.unlock();
+    this.hud.hideOverlay();
+    this.enemies.clear();
+    this.upgrades.resetStageUpgrades();
+    this.activeUpgradeEffects.length = 0;
+    this.waves.startInfiniteWar(imageAssets.stageBackgrounds.length);
+    this.setStageBackground(this.waves.stage);
+    this.resetBarricade();
+    this.setupCombatantsFromPreparation();
+    this.resetAim();
+    this.alignStageMapToBackground();
+    this.mode = 'playing';
+    void this.hud.getCanvasHost().requestPointerLock();
   }
 
   private randomInt(min: number, max: number): number {

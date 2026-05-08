@@ -1406,8 +1406,16 @@ button {
   line-height: 1.25;
 }
 
-.stage-clear-panel > button {
+.stage-clear-panel > button,
+.stage-clear-actions button {
   font-size: clamp(16px, calc(28px * var(--game-scale)), 28px);
+}
+
+.stage-clear-actions {
+  display: flex;
+  justify-content: center;
+  gap: clamp(12px, calc(24px * var(--game-scale)), 24px);
+  flex-wrap: wrap;
 }
 
 .stage-clear-panel h2,
@@ -2266,13 +2274,16 @@ button {
   top: 50%;
   left: 50%;
   --crosshair-pulse: 0;
+  --crosshair-color: rgba(72, 238, 226, 0.52);
+  --crosshair-dot-color: #42eee4;
   width: min(7vw, 90px);
   aspect-ratio: 1;
-  border: 3px solid rgba(72, 238, 226, 0.52);
+  border: 3px solid var(--crosshair-color);
   border-radius: 50%;
   opacity: 0.8;
-  transform: translate(-50%, -50%) scale(calc(1 + var(--crosshair-pulse) * 0.18));
+  transform: translate(-50%, -50%) scale(calc(0.7 + var(--crosshair-pulse) * 0.3));
   transition:
+    border-color 90ms ease-out,
     opacity 90ms ease-out,
     transform 90ms ease-out;
   clip-path: polygon(43% 0, 57% 0, 57% 37%, 100% 37%, 100% 63%, 57% 63%, 57% 100%, 43% 100%, 43% 63%, 0 63%, 0 37%, 43% 37%);
@@ -2282,7 +2293,7 @@ button {
   position: absolute;
   inset: 45%;
   border-radius: 50%;
-  background: #42eee4;
+  background: var(--crosshair-dot-color);
   content: "";
 }
 

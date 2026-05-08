@@ -147,6 +147,8 @@ export interface WaveSnapshot {
   wavesPerStage: number;
   total: number;
   remaining: number;
+  infinite: boolean;
+  infiniteElapsed: number;
 }
 
 export interface ActiveEffectSnapshot {

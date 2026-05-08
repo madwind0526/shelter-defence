@@ -47,6 +47,8 @@ interface HudState {
   wavesPerStage: number;
   waveTotal: number;
   waveRemaining: number;
+  infinite: boolean;
+  infiniteElapsed: number;
   kills: number;
   score: number;
   weaponName: string;
@@ -167,10 +169,7 @@ export class Hud {
           ${this.renderMainSoldiers(state)}
         </div>
 
-        <div class="main-wave-card">
-          <strong>STAGE ${Math.max(1, state.stage)} WAVES (${Math.max(1, state.waveInStage)}/${state.wavesPerStage})</strong>
-          <b>${waveRemaining}/${waveTotal} Zombies are remaining</b>
-        </div>
+        ${this.renderWaveCard(state, waveRemaining, waveTotal)}
 
         <div class="main-top-controls">
           ${this.renderTopControl(mainHudAssets.menu, 'MENU', 'F1')}
@@ -196,7 +195,7 @@ export class Hud {
 
         <div
           class="main-crosshair-mark"
-          style="left: ${50 + state.aimX * 50}%; top: ${50 - state.aimY * 50}%; --crosshair-pulse: ${state.crosshairPulse.toFixed(3)}"
+          style="left: ${50 + state.aimX * 50}%; top: ${50 - state.aimY * 50}%; --crosshair-pulse: ${state.crosshairPulse.toFixed(3)}; --crosshair-color: ${state.crosshairPulse > 0 ? 'rgba(255, 38, 38, 0.95)' : 'rgba(72, 238, 226, 0.52)'}; --crosshair-dot-color: ${state.crosshairPulse > 0 ? '#ff2626' : '#42eee4'}"
         ></div>
 
         ${this.renderEnemyHealthBars(state.enemyHealthBars)}
@@ -435,8 +434,34 @@ export class Hud {
     return images[itemId] ?? '';
   }
 
+  private renderWaveCard(state: HudState, waveRemaining: number, waveTotal: number): string {
+    if (state.infinite) {
+      return `
+        <div class="main-wave-card infinite">
+          <strong>STAGE ${Math.max(1, state.stage)} INFINITE WAR</strong>
+          <b>Timer ${this.formatTimer(state.infiniteElapsed)}</b>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="main-wave-card">
+        <strong>STAGE ${Math.max(1, state.stage)} WAVES (${Math.max(1, state.waveInStage)}/${state.wavesPerStage})</strong>
+        <b>${waveRemaining}/${waveTotal} Zombies are remaining</b>
+      </div>
+    `;
+  }
+
   private formatNumber(value: number): string {
     return Math.max(0, Math.floor(value)).toLocaleString();
+  }
+
+  private formatTimer(seconds: number): string {
+    const totalSeconds = Math.max(0, Math.floor(seconds));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const rest = totalSeconds % 60;
+    return [hours, minutes, rest].map(value => String(value).padStart(2, '0')).join(':');
   }
 
   showIntro(onPreparation: () => void, onStart: () => void): void {
@@ -706,7 +731,8 @@ export class Hud {
     stage: number,
     reward: ClearReward,
     hasNextStage: boolean,
-    onNext: () => void
+    onNext: () => void,
+    onInfinite?: () => void
   ): void {
     this.overlay.className = 'overlay visible';
     this.overlay.innerHTML = `
@@ -715,10 +741,20 @@ export class Hud {
         <h2>Stage ${stage} Clear</h2>
         <p class="clear-reward">+${this.formatNumber(reward.gold)} Gold / +${reward.rubi} Rubi</p>
         <p>${hasNextStage ? 'Next stage begins with stronger zombies.' : 'All prepared stages are cleared.'}</p>
-        <button type="button">${hasNextStage ? 'Next Stage' : 'Title'}</button>
+        ${hasNextStage || !onInfinite
+          ? `<button class="stage-next" type="button">${hasNextStage ? 'Next Stage' : 'Title'}</button>`
+          : `
+            <div class="stage-clear-actions">
+              <button class="stage-title" type="button">Return to Title</button>
+              <button class="stage-infinite" type="button">Infinite War</button>
+            </div>
+          `}
       </section>
     `;
-    this.overlay.querySelector('button')?.addEventListener('click', onNext, {
+    this.overlay.querySelector<HTMLButtonElement>('.stage-next, .stage-title')?.addEventListener('click', onNext, {
+      once: true
+    });
+    this.overlay.querySelector<HTMLButtonElement>('.stage-infinite')?.addEventListener('click', onInfinite ?? onNext, {
       once: true
     });
   }

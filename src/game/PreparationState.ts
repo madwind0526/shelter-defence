@@ -227,7 +227,7 @@ export class PreparationState {
       image: itemAssets.jacket,
       count: 0,
       maxCount: 1,
-      priceGold: 450,
+      priceGold: 4500,
       detail: 'Reduces damage.'
     },
     {
@@ -236,7 +236,7 @@ export class PreparationState {
       image: itemAssets.potionHealth,
       count: 0,
       maxCount: 999,
-      priceGold: 100,
+      priceGold: 1000,
       detail: 'Restores health.'
     },
     {
@@ -245,7 +245,7 @@ export class PreparationState {
       image: itemAssets.potionDex,
       count: 0,
       maxCount: 999,
-      priceGold: 100,
+      priceGold: 1000,
       detail: 'Boosts dexterity.'
     },
     {
@@ -254,7 +254,7 @@ export class PreparationState {
       image: itemAssets.potionInt,
       count: 0,
       maxCount: 999,
-      priceGold: 100,
+      priceGold: 1000,
       detail: 'Raises critical hit chance.'
     },
     {
@@ -263,7 +263,7 @@ export class PreparationState {
       image: itemAssets.repairKit,
       count: 0,
       maxCount: 999,
-      priceGold: 250,
+      priceGold: 2500,
       detail: 'Repairs barricade.'
     },
     {
@@ -272,7 +272,7 @@ export class PreparationState {
       image: itemAssets.magazine,
       count: BASE_MAGAZINE_COUNT,
       maxCount: 999,
-      priceGold: 100,
+      priceGold: 1000,
       detail: 'Adds ammo reserve.'
     }
   ];
