@@ -595,13 +595,18 @@ button {
 }
 
 .prep-hire {
-  min-height: clamp(34px, calc(48px * var(--game-scale)), 48px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(44px, calc(76px * var(--game-scale)), 76px);
+  padding: clamp(5px, calc(8px * var(--game-scale)), 8px) clamp(18px, calc(34px * var(--game-scale)), 34px);
   border: 1px solid rgba(23, 144, 87, 0.34);
   border-radius: 8px;
   background: linear-gradient(180deg, #d7f5df, #9ed9aa);
   color: #125731;
   font-family: "DS Digital", Inter, ui-sans-serif, system-ui, sans-serif;
   font-weight: 900;
+  line-height: 0.9;
   text-transform: uppercase;
   box-shadow: 0 16px 28px rgba(34, 96, 49, 0.16);
 }
@@ -823,8 +828,8 @@ button {
 }
 
 .prep-hire {
-  min-width: min(58%, calc(290px * var(--game-scale)));
-  margin-top: clamp(4px, calc(8px * var(--game-scale)), 8px);
+  min-width: min(70%, calc(380px * var(--game-scale)));
+  margin-top: clamp(1px, calc(4px * var(--game-scale)), 4px);
   font-size: var(--prep-hire-font-size);
 }
 
@@ -859,6 +864,8 @@ button {
 .prep-turret-actions .prep-hire {
   min-width: 0;
   width: 100%;
+  min-height: clamp(36px, calc(56px * var(--game-scale)), 56px);
+  padding: clamp(4px, calc(7px * var(--game-scale)), 7px) clamp(7px, calc(12px * var(--game-scale)), 12px);
   margin-top: 0;
   font-size: clamp(15px, calc(34px * var(--game-scale)), 34px);
 }
@@ -1004,6 +1011,8 @@ button {
   padding-top: 0;
 }
 
+.prep-soldier-zone h2,
+.prep-weapon-section h2,
 .prep-items-section h2 {
   display: flex;
   align-items: center;
@@ -1162,7 +1171,10 @@ button {
   color: #0d77b3;
 }
 
-.prep-reset-items {
+.prep-reset-soldiers,
+.prep-reset-weapons,
+.prep-reset-items,
+.prep-level-up {
   display: grid;
   place-items: center;
   width: clamp(28px, calc(62px * var(--game-scale)), 62px);
@@ -1175,15 +1187,37 @@ button {
     drop-shadow(0 0 10px rgba(255, 226, 65, 0.18));
 }
 
-.prep-reset-items:hover {
+.prep-level-up {
+  width: clamp(42px, calc(88px * var(--game-scale)), 88px);
+}
+
+.prep-reset-soldiers:hover,
+.prep-reset-weapons:hover,
+.prep-reset-items:hover,
+.prep-level-up:hover {
   transform: translateY(-1px);
 }
 
-.prep-reset-items img {
+.prep-reset-soldiers img,
+.prep-reset-weapons img,
+.prep-reset-items img,
+.prep-level-up img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
+}
+
+.prep-level-up img {
+  width: 150%;
+  height: 150%;
+}
+
+.prep-level-up:disabled,
+.prep-reset-weapons:disabled {
+  cursor: default;
+  filter: grayscale(0.75);
+  opacity: 0.48;
 }
 
 .prep-message {
@@ -1408,14 +1442,36 @@ button {
 
 .stage-clear-panel > button,
 .stage-clear-actions button {
-  font-size: clamp(16px, calc(28px * var(--game-scale)), 28px);
+  min-height: clamp(48px, calc(70px * var(--game-scale)), 70px);
+  padding: 0 clamp(22px, calc(36px * var(--game-scale)), 36px);
+  border-radius: 8px;
+  background: #d9f177;
+  color: #111518;
+  font-size: clamp(24px, calc(44px * var(--game-scale)), 44px);
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.stage-clear-actions button:hover {
+  background: #fff09a;
+  transform: translateY(-1px);
 }
 
 .stage-clear-actions {
-  display: flex;
+  display: grid;
   justify-content: center;
-  gap: clamp(12px, calc(24px * var(--game-scale)), 24px);
-  flex-wrap: wrap;
+  gap: clamp(10px, calc(18px * var(--game-scale)), 18px);
+  width: min(86%, calc(360px * var(--game-scale)));
+  margin: clamp(2px, calc(8px * var(--game-scale)), 8px) auto 0;
+}
+
+.stage-clear-actions button {
+  width: 100%;
 }
 
 .stage-clear-panel h2,
@@ -2273,28 +2329,81 @@ button {
   position: absolute;
   top: 50%;
   left: 50%;
-  --crosshair-pulse: 0;
-  --crosshair-color: rgba(72, 238, 226, 0.52);
-  --crosshair-dot-color: #42eee4;
-  width: min(7vw, 90px);
+  --crosshair-color: rgba(72, 238, 226, 0.96);
+  --crosshair-glow: rgba(72, 238, 226, 0.52);
+  --crosshair-size: clamp(38px, calc(70px * var(--game-scale)), 70px);
+  --crosshair-gap: clamp(7px, calc(12px * var(--game-scale)), 12px);
+  --crosshair-arm: clamp(11px, calc(20px * var(--game-scale)), 20px);
+  --crosshair-thickness: clamp(4px, calc(7px * var(--game-scale)), 7px);
+  z-index: 12;
+  width: var(--crosshair-size);
   aspect-ratio: 1;
-  border: 3px solid var(--crosshair-color);
-  border-radius: 50%;
-  opacity: 0.8;
-  transform: translate(-50%, -50%) scale(calc(0.7 + var(--crosshair-pulse) * 0.3));
-  transition:
-    border-color 90ms ease-out,
-    opacity 90ms ease-out,
-    transform 90ms ease-out;
-  clip-path: polygon(43% 0, 57% 0, 57% 37%, 100% 37%, 100% 63%, 57% 63%, 57% 100%, 43% 100%, 43% 63%, 0 63%, 0 37%, 43% 37%);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
-.main-crosshair-mark::after {
+.main-crosshair-mark.active {
+  --crosshair-color: #ff2626;
+  --crosshair-glow: rgba(255, 38, 38, 0.72);
+  --crosshair-size: clamp(54px, calc(100px * var(--game-scale)), 100px);
+  --crosshair-gap: clamp(10px, calc(18px * var(--game-scale)), 18px);
+  --crosshair-arm: clamp(16px, calc(29px * var(--game-scale)), 29px);
+}
+
+.crosshair-line,
+.crosshair-dot {
   position: absolute;
-  inset: 45%;
+  display: block;
+  background: var(--crosshair-color);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.82),
+    0 0 10px var(--crosshair-glow);
+}
+
+.crosshair-line {
+  border-radius: 999px;
+}
+
+.crosshair-line-top,
+.crosshair-line-bottom {
+  left: 50%;
+  width: var(--crosshair-thickness);
+  height: var(--crosshair-arm);
+  transform: translateX(-50%);
+}
+
+.crosshair-line-top {
+  bottom: calc(50% + var(--crosshair-gap));
+}
+
+.crosshair-line-bottom {
+  top: calc(50% + var(--crosshair-gap));
+}
+
+.crosshair-line-left,
+.crosshair-line-right {
+  top: 50%;
+  width: var(--crosshair-arm);
+  height: var(--crosshair-thickness);
+  transform: translateY(-50%);
+}
+
+.crosshair-line-left {
+  right: calc(50% + var(--crosshair-gap));
+}
+
+.crosshair-line-right {
+  left: calc(50% + var(--crosshair-gap));
+}
+
+.crosshair-dot {
+  top: 50%;
+  left: 50%;
+  width: var(--crosshair-thickness);
+  aspect-ratio: 1;
   border-radius: 50%;
-  background: var(--crosshair-dot-color);
-  content: "";
+  background: var(--crosshair-color);
+  transform: translate(-50%, -50%);
 }
 
 .main-enemy-health-layer {
@@ -2503,6 +2612,69 @@ button {
   width: min(620px, 92%);
 }
 
+.settings-panel {
+  display: grid;
+  justify-items: stretch;
+  gap: clamp(10px, calc(18px * var(--game-scale)), 18px);
+  width: min(760px, 92%);
+  font-family: "DS Digital", Inter, ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+}
+
+.settings-grid {
+  display: grid;
+  gap: clamp(8px, calc(12px * var(--game-scale)), 12px);
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.72fr);
+  align-items: center;
+  gap: clamp(10px, calc(18px * var(--game-scale)), 18px);
+  min-height: clamp(46px, calc(62px * var(--game-scale)), 62px);
+  padding: clamp(6px, calc(10px * var(--game-scale)), 10px) clamp(10px, calc(16px * var(--game-scale)), 16px);
+  border: 1px solid rgba(126, 232, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.setting-row span {
+  color: #ffef53;
+  font-size: clamp(20px, calc(34px * var(--game-scale)), 34px);
+  line-height: 1;
+  text-align: left;
+  text-shadow: 0 2px 2px #000;
+}
+
+.setting-input {
+  width: 100%;
+  min-height: clamp(36px, calc(48px * var(--game-scale)), 48px);
+  border: 1px solid rgba(126, 232, 255, 0.5);
+  border-radius: 8px;
+  background: rgba(2, 10, 14, 0.9);
+  color: #fff;
+  font: inherit;
+  font-size: clamp(18px, calc(30px * var(--game-scale)), 30px);
+  text-align: center;
+  outline: none;
+}
+
+.setting-toggle-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.setting-toggle {
+  width: clamp(58px, calc(86px * var(--game-scale)), 86px);
+  min-height: clamp(34px, calc(46px * var(--game-scale)), 46px);
+  accent-color: #d9f177;
+}
+
+.settings-resume {
+  justify-self: center;
+  width: min(82%, calc(320px * var(--game-scale)));
+  font-size: clamp(24px, calc(42px * var(--game-scale)), 42px);
+}
+
 .cheat-panel {
   width: min(720px, 92%);
 }
@@ -2592,6 +2764,17 @@ button {
   width: 78%;
   height: 78%;
   object-fit: contain;
+}
+
+.main-active-effect.iconless em {
+  color: #dff7ff;
+  font-family: var(--digital-font);
+  font-size: clamp(12px, calc(18px * var(--game-scale)), 18px);
+  font-style: normal;
+  line-height: 1;
+  text-shadow:
+    0 1px 1px #000,
+    0 0 8px rgba(72, 220, 255, 0.7);
 }
 
 .main-active-effect b {
@@ -2728,6 +2911,80 @@ button {
   text-shadow:
     0 2px 2px #000,
     0 0 10px rgba(255, 88, 218, 0.92);
+}
+
+.screen-explosion {
+  position: absolute;
+  z-index: 16;
+  width: clamp(112px, calc(210px * var(--game-scale)), 210px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 18px rgba(255, 102, 12, 0.72));
+  animation: screen-explosion-shake 760ms ease-out forwards;
+}
+
+.screen-explosion.air-strike {
+  width: clamp(92px, calc(170px * var(--game-scale)), 170px);
+  animation-duration: 940ms;
+}
+
+.screen-explosion i {
+  position: absolute;
+  inset: 50%;
+  display: block;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.explosion-core {
+  width: 32%;
+  aspect-ratio: 1;
+  background:
+    radial-gradient(circle, #fffbe8 0 18%, #ffdc45 25% 42%, #ff5c16 52% 70%, rgba(255, 57, 8, 0) 74%);
+  animation: explosion-core-pop 680ms ease-out forwards;
+}
+
+.explosion-ring {
+  width: 24%;
+  aspect-ratio: 1;
+  border: clamp(5px, calc(9px * var(--game-scale)), 9px) solid rgba(255, 228, 84, 0.9);
+  box-shadow:
+    0 0 24px rgba(255, 92, 18, 0.82),
+    inset 0 0 20px rgba(255, 255, 255, 0.6);
+  animation: explosion-ring-expand 720ms ease-out forwards;
+}
+
+.explosion-sparks {
+  width: 92%;
+  aspect-ratio: 1;
+  background:
+    conic-gradient(
+      from 12deg,
+      transparent 0 4deg,
+      rgba(255, 240, 112, 0.95) 5deg 8deg,
+      transparent 10deg 28deg,
+      rgba(255, 93, 18, 0.92) 30deg 34deg,
+      transparent 36deg 58deg,
+      rgba(255, 255, 255, 0.9) 60deg 63deg,
+      transparent 65deg 92deg,
+      rgba(255, 156, 20, 0.9) 94deg 100deg,
+      transparent 102deg 132deg,
+      rgba(255, 74, 12, 0.9) 134deg 139deg,
+      transparent 141deg 178deg,
+      rgba(255, 238, 88, 0.86) 180deg 185deg,
+      transparent 187deg 222deg,
+      rgba(255, 255, 255, 0.84) 224deg 228deg,
+      transparent 230deg 274deg,
+      rgba(255, 86, 12, 0.9) 276deg 282deg,
+      transparent 284deg 330deg,
+      rgba(255, 210, 62, 0.9) 332deg 337deg,
+      transparent 340deg 360deg
+    );
+  clip-path: polygon(50% 0, 56% 34%, 86% 9%, 66% 43%, 100% 50%, 66% 57%, 86% 91%, 56% 66%, 50% 100%, 44% 66%, 14% 91%, 34% 57%, 0 50%, 34% 43%, 14% 9%, 44% 34%);
+  opacity: 0.95;
+  animation: explosion-sparks-burst 760ms ease-out forwards;
 }
 
 .gameover-panel,
@@ -2878,6 +3135,73 @@ button {
   to {
     opacity: 0;
     transform: translate(-50%, -145%) scale(1.1);
+  }
+}
+
+@keyframes screen-explosion-shake {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35) rotate(0deg);
+  }
+
+  15% {
+    opacity: 1;
+    transform: translate(calc(-50% - 4px), calc(-50% + 3px)) scale(1.05) rotate(-4deg);
+  }
+
+  42% {
+    opacity: 0.95;
+    transform: translate(calc(-50% + 3px), calc(-50% - 2px)) scale(1.15) rotate(5deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.35) rotate(12deg);
+  }
+}
+
+@keyframes explosion-core-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.1);
+  }
+}
+
+@keyframes explosion-ring-expand {
+  0% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(4.2);
+  }
+}
+
+@keyframes explosion-sparks-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.18) rotate(0deg);
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.75) rotate(38deg);
   }
 }
 

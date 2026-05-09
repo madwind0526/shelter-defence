@@ -48,6 +48,7 @@ export class AudioManager {
   private readonly sounds = new Map<WeaponSoundId, HTMLAudioElement[]>();
   private readonly effects = new Map<EffectSoundId, HTMLAudioElement[]>();
   private unlocked = false;
+  private muted = false;
 
   constructor() {
     for (const id of Object.keys(soundAssets) as WeaponSoundId[]) {
@@ -61,6 +62,18 @@ export class AudioManager {
 
   unlock(): void {
     this.unlocked = true;
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (!muted) return;
+
+    for (const pool of [...this.sounds.values(), ...this.effects.values()]) {
+      for (const audio of pool) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    }
   }
 
   playWeaponShot(id: WeaponSoundId): void {
@@ -127,7 +140,7 @@ export class AudioManager {
   }
 
   private play(id: WeaponSoundId, playbackRate = 1): void {
-    if (!this.unlocked) return;
+    if (!this.unlocked || this.muted) return;
 
     const pool = this.sounds.get(id);
     if (!pool) return;
@@ -148,7 +161,7 @@ export class AudioManager {
   }
 
   private playEffect(id: EffectSoundId, playbackRate = 1): void {
-    if (!this.unlocked) return;
+    if (!this.unlocked || this.muted) return;
 
     const pool = this.effects.get(id);
     if (!pool) return;

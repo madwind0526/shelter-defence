@@ -7,6 +7,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Raycaster,
   Scene,
   SRGBColorSpace,
   Texture,
@@ -32,11 +33,13 @@ import { WeaponView } from './WeaponView';
 import { WaveManager } from './WaveManager';
 import {
   GameMode,
+  GameSettings,
   MAX_TURRET_SLOTS,
   PreparationSnapshot,
   ActiveEffectSnapshot,
   BarricadeSnapshot,
   PreparationSoldier,
+  PreparationTurret,
   PreparationWeapon,
   SoldierHealthSnapshot,
   TurretSnapshot,
@@ -85,6 +88,25 @@ const POTION_EFFECT_DURATION = 10;
 const HEALTH_POTION_HEAL_PER_SECOND = 3.5;
 const DEX_POTION_FIRE_RATE_MULTIPLIER = 1.15;
 const INT_POTION_CRITICAL_BONUS = 0.1;
+const CROSSHAIR_FIRE_BLINK_INTERVAL = 0.12;
+const INFINITE_KILL_BUFF_CHANCE = 0.1;
+const GRENADE_SPLASH_RADIUS = 5.5;
+const GRENADE_SPLASH_DAMAGE = 315;
+const GRENADE_SPLASH_MAX_TARGETS = 10;
+const AIR_STRIKE_DAMAGE = 800;
+const HUD_UPDATE_INTERVAL = 1 / 20;
+
+const DEFAULT_GAME_SETTINGS: GameSettings = {
+  zombieMaterialMode: 'plain-metal',
+  monsterType: 'dummy',
+  zombieSpawnBatchSize: 2,
+  soundEnabled: true,
+  autoFire: false,
+  autoTargeting: false,
+  randomBuffs: false,
+  infiniteWar: false,
+  infiniteLoop: false
+};
 
 export class Game {
   private readonly hud: Hud;
@@ -126,10 +148,15 @@ export class Game {
   private readonly pendingDamagePopups = new Map<number, PendingDamagePopup>();
   private readonly activePotionEffects = new Map<PotionEffectId, PotionEffectState>();
   private readonly activeUpgradeEffects: ActiveEffectSnapshot[] = [];
+  private readonly settings: GameSettings = { ...DEFAULT_GAME_SETTINGS };
+  private readonly grenadeRaycaster = new Raycaster();
   private readonly debugWorldMeshes: Mesh[] = [];
   private readonly turretFireCooldowns = new Map<number, number>();
   private readonly turretShotCounts = new Map<number, number>();
   private crosshairPulseTimer = 0;
+  private crosshairFireBlinkTimer = 0;
+  private hudUpdateTimer = 0;
+  private autoTargetLocked = false;
   private readonly barricade: BarricadeSnapshot = {
     health: 1500,
     maxHealth: 1500
@@ -163,7 +190,9 @@ export class Game {
     this.configureRenderer();
     this.createWorld();
     this.bindEvents();
+    this.applySettings();
     this.showIntro();
+    this.preloadStageAssets();
   }
 
   start(): void {
@@ -220,6 +249,18 @@ export class Game {
         this.preparation.equipSelectedWeapon();
         this.openPreparation(fromRun);
       },
+      onLevelUpSoldier: () => {
+        this.preparation.levelUpSelectedSoldier();
+        this.openPreparation(fromRun);
+      },
+      onLevelUpWeapon: () => {
+        this.preparation.levelUpSelectedWeapon();
+        this.openPreparation(fromRun);
+      },
+      onResetWeapons: () => {
+        this.preparation.resetWeapons();
+        this.openPreparation(fromRun);
+      },
       onHireSoldier: () => {
         this.preparation.hireSelectedSoldier();
         this.openPreparation(fromRun);
@@ -230,6 +271,10 @@ export class Game {
       },
       onFireTurret: () => {
         this.preparation.fireSelectedTurret();
+        this.openPreparation(fromRun);
+      },
+      onResetPersonnel: () => {
+        this.preparation.resetPersonnel();
         this.openPreparation(fromRun);
       },
       onBuyItem: (itemId: string) => {
@@ -298,6 +343,7 @@ export class Game {
       this.updateSpecialCounters(delta);
       this.updatePotionEffects(delta);
       this.handleGameplayHotkeys();
+      this.updateAutoTargeting(delta);
       this.handleSquadFire();
       this.handleShootRelease();
       this.updateTurretFire(delta);
@@ -336,6 +382,16 @@ export class Game {
 
     this.updateFloatingDamagePopups(delta);
     this.crosshairPulseTimer = Math.max(0, this.crosshairPulseTimer - delta);
+    this.updateCrosshairFireBlink(delta);
+    this.hud.updateAim(this.aim.x, this.aim.y, this.getCrosshairPulse());
+
+    if (this.mode === 'playing') {
+      this.hudUpdateTimer -= delta;
+      if (this.hudUpdateTimer > 0) return;
+      this.hudUpdateTimer = HUD_UPDATE_INTERVAL;
+    } else {
+      this.hudUpdateTimer = 0;
+    }
 
     const snapshot = this.enemies.getSnapshot();
     const preparationSnapshot = this.preparation.snapshot();
@@ -375,8 +431,31 @@ export class Game {
       },
       aimX: this.aim.x,
       aimY: this.aim.y,
-      crosshairPulse: this.input.isShooting() ? 1 : Math.min(1, this.crosshairPulseTimer / 0.16)
+      crosshairPulse: this.getCrosshairPulse()
     });
+  }
+
+  private updateCrosshairFireBlink(delta: number): void {
+    if (this.isFiringInputActive()) {
+      this.crosshairFireBlinkTimer += delta;
+      return;
+    }
+
+    this.crosshairFireBlinkTimer = 0;
+  }
+
+  private getCrosshairPulse(): number {
+    if (this.isFiringInputActive()) {
+      return Math.floor(this.crosshairFireBlinkTimer / CROSSHAIR_FIRE_BLINK_INTERVAL) % 2 === 0
+        ? 1
+        : 0;
+    }
+
+    return Math.min(1, this.crosshairPulseTimer / 0.16);
+  }
+
+  private isFiringInputActive(): boolean {
+    return this.mode === 'playing' && (this.input.isShooting() || this.settings.autoFire);
   }
 
   private resetSpecialCounters(): void {
@@ -539,8 +618,20 @@ export class Game {
     }
 
     this.grenadeCount -= 1;
+    this.hud.showExplosion(50 + this.aim.x * 50, 50 - this.aim.y * 50, 'grenade');
     const killedBefore = this.enemies.getSnapshot().killed;
-    this.enemies.damageAll(80, 6);
+    this.grenadeRaycaster.setFromCamera(this.aim, this.player.camera);
+    const impact = this.enemies.getAimImpactPoint(this.grenadeRaycaster, 34);
+    const results = this.enemies.damageAround(
+      impact,
+      GRENADE_SPLASH_RADIUS,
+      GRENADE_SPLASH_DAMAGE,
+      0.35,
+      GRENADE_SPLASH_MAX_TARGETS
+    );
+    for (const result of results) {
+      this.queueFloatingDamage(result.enemyId, result.point, result.amount, false);
+    }
     this.awardIndirectKills(this.enemies.getSnapshot().killed - killedBefore);
     this.audio.playWeaponShot('explosion');
   }
@@ -551,10 +642,14 @@ export class Game {
     }
 
     this.airStrikeCount -= 1;
+    this.hud.showAirStrikeExplosions();
     const killedBefore = this.enemies.getSnapshot().killed;
-    this.enemies.damageAll(160);
+    this.enemies.damageAll(AIR_STRIKE_DAMAGE);
     this.awardIndirectKills(this.enemies.getSnapshot().killed - killedBefore);
     this.audio.playWeaponShot('fallingBomb');
+    for (const delay of [280, 520, 760]) {
+      window.setTimeout(() => this.audio.playWeaponShot('explosion'), delay);
+    }
   }
 
   private updateSoldierCombatTimers(delta: number): void {
@@ -572,9 +667,10 @@ export class Game {
 
   private handleSquadFire(): void {
     const shootRequested = this.input.consumeShootRequest();
+    const autoFireActive = this.settings.autoFire && this.mode === 'playing';
     if (
       document.pointerLockElement !== this.hud.getCanvasHost() ||
-      (!shootRequested && !this.input.isShooting()) ||
+      (!shootRequested && !this.input.isShooting() && !autoFireActive) ||
       this.enemies.getCount() <= 0
     ) {
       return;
@@ -729,7 +825,10 @@ export class Game {
   }
 
   private maybeApplyInfiniteKillBuff(): void {
-    if (!this.waves.isInfiniteWar() || Math.random() >= 0.05) {
+    if (
+      !this.waves.isInfiniteWar() ||
+      Math.random() >= INFINITE_KILL_BUFF_CHANCE
+    ) {
       return;
     }
 
@@ -897,7 +996,7 @@ export class Game {
       effects.push({
         id: 'jacket',
         label: jacket.name,
-        image: jacket.image
+        image: mainHudAssets.jacket
       });
     }
 
@@ -936,6 +1035,40 @@ export class Game {
       turret.criticalChance = Math.min(0.95, (turret.criticalChance ?? 0) + amount);
     }
     this.refreshActiveWeaponDefinition();
+  }
+
+  private applySettings(): void {
+    this.normalizeExclusiveSettings();
+    this.enemies.setZombieMaterialMode(this.settings.zombieMaterialMode);
+    this.enemies.setMonsterType(this.settings.monsterType);
+    this.waves.setMonsterType(this.settings.monsterType);
+    this.waves.setSpawnBatchSize(this.settings.zombieSpawnBatchSize);
+    this.audio.setMuted(!this.settings.soundEnabled);
+  }
+
+  private normalizeExclusiveSettings(): void {
+    if (!this.settings.infiniteWar || !this.settings.infiniteLoop) return;
+    this.settings.infiniteLoop = false;
+  }
+
+  private updateAutoTargeting(delta: number): void {
+    if (!this.settings.autoTargeting || this.enemies.getCount() <= 0) {
+      this.autoTargetLocked = false;
+      return;
+    }
+
+    const targetAim = this.enemies.getNearestTargetAim(this.player.camera, this.aim);
+    if (!targetAim) {
+      this.autoTargetLocked = false;
+      return;
+    }
+
+    this.autoTargetLocked = true;
+    const tracking = Math.min(1, delta * 12);
+    this.aim.lerp(targetAim, tracking);
+    this.aim.x = Math.max(-0.96, Math.min(0.96, this.aim.x));
+    this.aim.y = Math.max(-0.86, Math.min(0.86, this.aim.y));
+    this.weaponView.setAim(this.aim.x, this.aim.y);
   }
 
   private damageBarricade(amount: number): void {
@@ -997,13 +1130,24 @@ export class Game {
       return;
     }
 
+    if (action === 'settings') {
+      this.hud.showSettings(this.settings, {
+        onChange: (nextSettings) => {
+          Object.assign(this.settings, nextSettings);
+          this.applySettings();
+          this.openMainControlPanel('settings');
+        },
+        onResume: () => this.resumeFromMainControlPanel()
+      });
+      return;
+    }
+
     const details: Record<MainControlAction, string> = {
       menu: 'Run menu selected with F1.',
-      settings: 'Settings will be implemented later.',
+      settings: 'Settings selected with F2.',
       pause: 'Game paused with F3.'
     };
-    const title = action === 'settings' ? 'SETTINGS' : action.toUpperCase();
-    this.hud.showMainControlPanel(title, details[action], () => this.resumeFromMainControlPanel());
+    this.hud.showMainControlPanel(action.toUpperCase(), details[action], () => this.resumeFromMainControlPanel());
   }
 
   private openCheatMenu(): void {
@@ -1182,17 +1326,8 @@ export class Game {
     }
 
     this.turrets = snapshot.turretSlots.map(turret => ({
-      installed: Boolean(turret),
-      id: turret?.id,
-      name: turret?.name,
-      image: turret?.image,
-      kind: turret?.kind,
-      damage: turret?.damage,
-      fireRate: turret?.fireRate,
-      criticalChance: turret?.criticalChance,
-      fireTimer: 0,
-      shield: turret?.maxShield ?? 0,
-      maxShield: turret?.maxShield ?? 100
+      ...this.createTurretSnapshot(turret),
+      fireTimer: 0
     }));
 
     while (this.turrets.length < MAX_TURRET_SLOTS) {
@@ -1311,17 +1446,61 @@ export class Game {
     fireRate: number;
     criticalChance: number;
   } {
-    const str = soldier.stats.str * weapon.statScale.str;
-    const dex = soldier.stats.dex * weapon.statScale.dex;
-    const int = soldier.stats.int * weapon.statScale.int;
+    const soldierLevelMultiplier = 1 + (soldier.level - 1) * 0.1;
+    const weaponLevelMultiplier = 1 + (weapon.level - 1) * 0.1;
+    const str = soldier.stats.str * soldierLevelMultiplier * weapon.statScale.str;
+    const dex = soldier.stats.dex * soldierLevelMultiplier * weapon.statScale.dex;
+    const int = soldier.stats.int * soldierLevelMultiplier * weapon.statScale.int;
+    const weaponDamage = weapon.damage * weaponLevelMultiplier;
+    const weaponFireRate = weapon.fireRate * weaponLevelMultiplier;
     return {
       str,
       dex,
       int,
       health: Math.max(1, Math.ceil(str) * 10),
-      damage: weapon.damage * (str / 100),
-      fireRate: weapon.fireRate * (dex / 100),
+      damage: weaponDamage * (str / 100),
+      fireRate: weaponFireRate * (dex / 100),
       criticalChance: Math.min(0.95, weapon.criticalChance * (int / 100))
+    };
+  }
+
+  private createTurretSnapshot(turret: PreparationTurret | null): TurretSnapshot {
+    if (!turret) {
+      return {
+        installed: false,
+        shield: 0,
+        maxShield: 100
+      };
+    }
+
+    const derived = this.getDerivedTurretStats(turret);
+    return {
+      installed: true,
+      id: turret.id,
+      name: turret.name,
+      image: turret.image,
+      kind: turret.kind,
+      level: turret.level,
+      damage: derived.damage,
+      fireRate: derived.fireRate,
+      criticalChance: derived.criticalChance,
+      shield: derived.maxShield,
+      maxShield: derived.maxShield
+    };
+  }
+
+  private getDerivedTurretStats(turret: PreparationTurret): {
+    damage: number;
+    fireRate: number;
+    criticalChance: number;
+    maxShield: number;
+  } {
+    const levelMultiplier = 1 + (Math.max(1, turret.level) - 1) * 0.1;
+    return {
+      damage: turret.damage * levelMultiplier,
+      fireRate: turret.fireRate * levelMultiplier,
+      criticalChance: Math.min(0.95, turret.criticalChance * levelMultiplier),
+      maxShield: Math.ceil(turret.maxShield * levelMultiplier)
     };
   }
 
@@ -1377,39 +1556,69 @@ export class Game {
   }
 
   private openUpgradeMenu(reward: ClearReward): void {
+    const choices = this.upgrades.getChoices();
+
+    if (this.settings.randomBuffs) {
+      this.applyUpgradeChoice(choices[this.randomInt(0, choices.length - 1)]);
+      return;
+    }
+
     this.mode = 'upgrade';
     this.stopLivingSoldierWeaponShots();
     document.exitPointerLock();
-    this.hud.showUpgrades(this.upgrades.getChoices(), reward, (upgrade: Upgrade) => {
-      upgrade.apply();
-      if (upgrade.icon) {
-        this.activeUpgradeEffects.push({
-          id: `upgrade-${this.activeUpgradeEffects.length}-${upgrade.id}`,
-          label: upgrade.title,
-          image: upgrade.icon
-        });
-      }
-      this.applyUpgradeToCombatants(upgrade.id);
-      this.audio.unlock();
-      this.hud.hideOverlay();
-      this.waves.continueAfterUpgrade();
-      this.alignStageMapToBackground();
-      this.mode = 'playing';
-      void this.hud.getCanvasHost().requestPointerLock();
-    });
+    this.hud.showUpgrades(choices, reward, (upgrade: Upgrade) => this.applyUpgradeChoice(upgrade));
+  }
+
+  private applyUpgradeChoice(upgrade: Upgrade): void {
+    upgrade.apply();
+    if (upgrade.icon) {
+      this.activeUpgradeEffects.push({
+        id: `upgrade-${this.activeUpgradeEffects.length}-${upgrade.id}`,
+        label: upgrade.title,
+        image: upgrade.icon
+      });
+    }
+    this.applyUpgradeToCombatants(upgrade.id);
+    this.audio.unlock();
+    this.hud.hideOverlay();
+    this.waves.continueAfterUpgrade();
+    this.alignStageMapToBackground();
+    this.mode = 'playing';
+    void this.hud.getCanvasHost().requestPointerLock();
   }
 
   private openStageClearPanel(reward: ClearReward): void {
     this.mode = 'upgrade';
     this.stopLivingSoldierWeaponShots();
-    document.exitPointerLock();
     this.upgrades.resetStageUpgrades();
     this.activeUpgradeEffects.length = 0;
     const hasNextStage = this.waves.stage < imageAssets.stageBackgrounds.length;
+
+    if (this.settings.infiniteLoop) {
+      if (hasNextStage) {
+        this.continueToNextStage();
+        return;
+      }
+      if (!this.settings.infiniteWar) {
+        this.restartStageLoop();
+        return;
+      }
+    }
+
+    if (!hasNextStage && this.settings.infiniteWar) {
+      this.startInfiniteWar();
+      return;
+    }
+
+    document.exitPointerLock();
     this.hud.showStageClear(this.waves.stage, reward, hasNextStage, () => {
       this.audio.unlock();
       this.hud.hideOverlay();
       if (!hasNextStage) {
+        if (this.settings.infiniteLoop) {
+          this.restartStageLoop();
+          return;
+        }
         this.resetToFreshIntro();
         return;
       }
@@ -1421,7 +1630,38 @@ export class Game {
       this.alignStageMapToBackground();
       this.mode = 'playing';
       void this.hud.getCanvasHost().requestPointerLock();
-    }, hasNextStage ? undefined : () => this.startInfiniteWar());
+    },
+    !hasNextStage ? () => this.startInfiniteWar() : undefined,
+    !hasNextStage && this.settings.infiniteLoop ? 'Loop Stage 1' : undefined);
+  }
+
+  private continueToNextStage(): void {
+    this.audio.unlock();
+    this.hud.hideOverlay();
+    this.waves.continueAfterStageClear();
+    this.setStageBackground(this.waves.stage);
+    this.resetBarricade();
+    this.setupCombatantsFromPreparation();
+    this.resetAim();
+    this.alignStageMapToBackground();
+    this.mode = 'playing';
+    this.requestGameplayPointerLock();
+  }
+
+  private restartStageLoop(): void {
+    this.audio.unlock();
+    this.hud.hideOverlay();
+    this.enemies.clear();
+    this.upgrades.resetStageUpgrades();
+    this.activeUpgradeEffects.length = 0;
+    this.waves.jumpToWave(1);
+    this.setStageBackground(1);
+    this.resetBarricade();
+    this.setupCombatantsFromPreparation();
+    this.resetAim();
+    this.alignStageMapToBackground();
+    this.mode = 'playing';
+    this.requestGameplayPointerLock();
   }
 
   private startInfiniteWar(): void {
@@ -1437,7 +1677,13 @@ export class Game {
     this.resetAim();
     this.alignStageMapToBackground();
     this.mode = 'playing';
-    void this.hud.getCanvasHost().requestPointerLock();
+    this.requestGameplayPointerLock();
+  }
+
+  private requestGameplayPointerLock(): void {
+    if (document.pointerLockElement !== this.hud.getCanvasHost()) {
+      void this.hud.getCanvasHost().requestPointerLock();
+    }
   }
 
   private randomInt(min: number, max: number): number {
@@ -1551,6 +1797,9 @@ export class Game {
     if (document.pointerLockElement !== this.hud.getCanvasHost()) {
       return;
     }
+    if (this.mode === 'playing' && this.settings.autoTargeting && this.autoTargetLocked) {
+      return;
+    }
 
     const sensitivity = 0.0018;
     this.aim.x = Math.max(-0.96, Math.min(0.96, this.aim.x + event.movementX * sensitivity));
@@ -1585,11 +1834,27 @@ export class Game {
   }
 
   private loadStageRoadProfile(stageNumber: number): void {
-    void this.roadMaskLoader.load(stageNumber, true).then(profile => {
+    void this.roadMaskLoader.load(stageNumber).then(profile => {
       if (this.currentStageNumber !== stageNumber) return;
       this.stageRoadProfile = profile;
       this.waves.setRoadProfile(profile);
       this.alignStageMapToBackground();
     });
+  }
+
+  private preloadStageAssets(): void {
+    window.setTimeout(() => {
+      imageAssets.stageBackgrounds.forEach((url, index) => {
+        const stageNumber = index + 1;
+        if (this.stageBackgrounds.has(stageNumber)) return;
+        const texture = this.textureLoader.load(url);
+        texture.colorSpace = SRGBColorSpace;
+        this.stageBackgrounds.set(stageNumber, texture);
+      });
+
+      for (let stageNumber = 1; stageNumber <= imageAssets.stageRoadMasks.length; stageNumber += 1) {
+        void this.roadMaskLoader.load(stageNumber);
+      }
+    }, 750);
   }
 }

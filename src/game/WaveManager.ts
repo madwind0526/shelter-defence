@@ -3,7 +3,7 @@ import { enemyModelAssets } from './AssetUrls';
 import { EnemyManager, EnemySpawnOptions } from './Enemy';
 import { Player } from './Player';
 import { defaultStageRoadProfile, StageRoadProfile } from './StageRoadMask';
-import { WaveSnapshot } from './types';
+import { MonsterType, WaveSnapshot } from './types';
 
 type WaveState = 'none' | 'waveComplete' | 'stageComplete';
 type SpawnKind = 'normal' | 'midBoss' | 'bigBoss';
@@ -19,13 +19,14 @@ const WAVE_NORMAL_COUNTS = [20, 40, 60, 80, 100];
 const BASE_ZOMBIE_HEALTH = 100;
 const STAGE_HEALTH_MULTIPLIER = 1.5;
 const ZOMBIE_MODEL_CHOICES_PER_WAVE = 3;
-const ZOMBIE_MODEL_VARIANT_IDS = enemyModelAssets.zombies.map((asset) => asset.id);
 const DEBUG_MODEL_REVIEW_COUNT = 20;
 const DEBUG_SPAWN_INTERVAL = 1;
-const INFINITE_BATCH_SIZE = 10;
-const INFINITE_SPAWN_INTERVAL = 3;
+const DEFAULT_SPAWN_BATCH_SIZE = 2;
+const INFINITE_SPAWN_INTERVAL = 1;
 const INFINITE_DIFFICULTY_INTERVAL = 60;
 const INFINITE_DIFFICULTY_MULTIPLIER = 1.2;
+const MAX_ACTIVE_DUMMY_ENEMIES = 140;
+const MAX_ACTIVE_GLB_ENEMIES = 60;
 
 export class WaveManager {
   wave = 0;
@@ -43,6 +44,8 @@ export class WaveManager {
   private mode: WaveMode = 'stage';
   private infiniteElapsed = 0;
   private infiniteModelIndex = 0;
+  private spawnBatchSize = DEFAULT_SPAWN_BATCH_SIZE;
+  private monsterType: MonsterType = 'dummy';
 
   constructor(private readonly enemies: EnemyManager) {}
 
@@ -68,6 +71,16 @@ export class WaveManager {
 
   setDebugMode(enabled: boolean): void {
     this.debugMode = enabled;
+  }
+
+  setSpawnBatchSize(count: number): void {
+    this.spawnBatchSize = MathUtils.clamp(Math.floor(count), 1, 50);
+  }
+
+  setMonsterType(type: MonsterType): void {
+    this.monsterType = type;
+    this.activeModelVariantIds = this.pickMonsterModelVariantIds();
+    this.infiniteModelIndex = 0;
   }
 
   update(delta: number, player: Player): WaveState {
@@ -96,8 +109,19 @@ export class WaveManager {
 
     this.spawnTimer -= delta;
     if (this.spawnQueue.length > 0 && this.spawnTimer <= 0) {
-      const request = this.spawnQueue.shift() ?? { kind: 'normal' };
-      this.enemies.spawn(this.getSpawnPosition(player.position), this.getSpawnOptions(request));
+      if (!this.enemies.isMonsterTypeReady(this.monsterType)) {
+        this.spawnTimer = 0.2;
+        return 'none';
+      }
+      if (this.enemies.getCount() >= this.getActiveEnemyLimit()) {
+        this.spawnTimer = 0.25;
+        return 'none';
+      }
+
+      for (let i = 0; i < this.spawnBatchSize && this.spawnQueue.length > 0; i += 1) {
+        const request = this.spawnQueue.shift() ?? { kind: 'normal' };
+        this.enemies.spawn(this.getSpawnPosition(player.position), this.getSpawnOptions(request));
+      }
       this.spawnTimer = this.getSpawnInterval();
     }
 
@@ -164,7 +188,7 @@ export class WaveManager {
 
     this.wave += 1;
     this.waveInStage += 1;
-    this.activeModelVariantIds = this.pickZombieModelVariantIds();
+    this.activeModelVariantIds = this.pickMonsterModelVariantIds();
     this.spawnQueue = this.createSpawnQueue(this.waveInStage);
     this.enemiesTotal = this.spawnQueue.length;
     this.spawnTimer = 0.3;
@@ -201,7 +225,12 @@ export class WaveManager {
   }
 
   private createSequentialModelReviewQueue(countPerVariant: number): SpawnRequest[] {
-    return ZOMBIE_MODEL_VARIANT_IDS.flatMap((modelVariantId) =>
+    const modelVariantIds = this.getMonsterModelVariantIds();
+    if (modelVariantIds.length === 0) {
+      return this.createNormalSpawnRequests(countPerVariant);
+    }
+
+    return modelVariantIds.flatMap((modelVariantId) =>
       Array.from({ length: countPerVariant }).map(() => ({
         kind: 'normal',
         modelVariantId
@@ -213,8 +242,16 @@ export class WaveManager {
     this.infiniteElapsed += delta;
     this.spawnTimer -= delta;
     if (this.spawnTimer > 0) return;
+    if (!this.enemies.isMonsterTypeReady(this.monsterType)) {
+      this.spawnTimer = 0.2;
+      return;
+    }
+    if (this.enemies.getCount() >= this.getActiveEnemyLimit()) {
+      this.spawnTimer = 0.25;
+      return;
+    }
 
-    for (let i = 0; i < INFINITE_BATCH_SIZE; i += 1) {
+    for (let i = 0; i < this.spawnBatchSize; i += 1) {
       const request = this.createInfiniteSpawnRequest();
       this.enemies.spawn(this.getSpawnPosition(player.position), this.getSpawnOptions(request));
       this.enemiesTotal += 1;
@@ -225,8 +262,9 @@ export class WaveManager {
   private createInfiniteSpawnRequest(): SpawnRequest {
     const roll = Math.random();
     const kind: SpawnKind = roll < 0.025 ? 'bigBoss' : roll < 0.115 ? 'midBoss' : 'normal';
-    const modelVariantId = ZOMBIE_MODEL_VARIANT_IDS[
-      this.infiniteModelIndex % Math.max(1, ZOMBIE_MODEL_VARIANT_IDS.length)
+    const modelVariantIds = this.getMonsterModelVariantIds();
+    const modelVariantId = modelVariantIds[
+      this.infiniteModelIndex % Math.max(1, modelVariantIds.length)
     ];
     this.infiniteModelIndex += 1;
     return { kind, modelVariantId };
@@ -239,8 +277,9 @@ export class WaveManager {
           Math.floor(this.infiniteElapsed / INFINITE_DIFFICULTY_INTERVAL)
         )
       : 1;
-    const baseHealth =
-      BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1) * infiniteScale;
+    const baseHealth = this.mode === 'infinite'
+      ? BASE_ZOMBIE_HEALTH * infiniteScale
+      : BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1);
     const bossScale: Record<SpawnKind, number> = {
       normal: 1,
       midBoss: 50,
@@ -271,8 +310,8 @@ export class WaveManager {
     return MathUtils.clamp(0.55 - this.waveInStage * 0.035, 0.18, 0.55);
   }
 
-  private pickZombieModelVariantIds(): string[] {
-    const remainingIds = [...ZOMBIE_MODEL_VARIANT_IDS];
+  private pickMonsterModelVariantIds(): string[] {
+    const remainingIds = this.getMonsterModelVariantIds();
     const selectedIds: string[] = [];
 
     while (
@@ -285,6 +324,18 @@ export class WaveManager {
     }
 
     return selectedIds;
+  }
+
+  private getMonsterModelVariantIds(): string[] {
+    if (this.monsterType === 'dummy') return [];
+
+    return this.monsterType === 'mech'
+      ? enemyModelAssets.mechs.map((asset) => asset.id)
+      : enemyModelAssets.zombies.map((asset) => asset.id);
+  }
+
+  private getActiveEnemyLimit(): number {
+    return this.monsterType === 'dummy' ? MAX_ACTIVE_DUMMY_ENEMIES : MAX_ACTIVE_GLB_ENEMIES;
   }
 
   private getWavesPerStage(stage = this.stage): number {

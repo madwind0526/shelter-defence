@@ -2,6 +2,26 @@ export type GameMode = 'ready' | 'playing' | 'upgrade' | 'gameover' | 'paused';
 
 export const MAX_TURRET_SLOTS = 2;
 
+export type ZombieMaterialMode =
+  | 'shiny-metal'
+  | 'plain-metal'
+  | 'mesh-toon'
+  | 'mesh-lambert';
+
+export type MonsterType = 'dummy' | 'zombie' | 'mech';
+
+export interface GameSettings {
+  zombieMaterialMode: ZombieMaterialMode;
+  monsterType: MonsterType;
+  zombieSpawnBatchSize: number;
+  soundEnabled: boolean;
+  autoFire: boolean;
+  autoTargeting: boolean;
+  randomBuffs: boolean;
+  infiniteWar: boolean;
+  infiniteLoop: boolean;
+}
+
 export type UpgradeId =
   | 'damage'
   | 'fireRate'
@@ -76,6 +96,7 @@ export interface PreparationSoldier {
     int: number;
   };
   equippedWeaponId: string;
+  level: number;
 }
 
 export interface PreparationTurret {
@@ -94,6 +115,7 @@ export interface PreparationTurret {
   fireRate: number;
   criticalChance: number;
   maxShield: number;
+  level: number;
 }
 
 export interface PreparationWeapon {
@@ -109,6 +131,7 @@ export interface PreparationWeapon {
     int: number;
   };
   damage: number;
+  level: number;
   fireRate: number;
   criticalChance: number;
   reloadTime: number;
@@ -164,6 +187,7 @@ export interface TurretSnapshot {
   name?: string;
   image?: string;
   kind?: 'gun';
+  level?: number;
   damage?: number;
   fireRate?: number;
   criticalChance?: number;

@@ -130,6 +130,10 @@ export const enemyModelAssets = {
       ).href,
       targetMaxDimension: 3.6,
       hitboxWidthMultiplier: 0.6,
+      materialRoughness: 0.96,
+      materialMetalness: 0,
+      materialEnvMapIntensity: 0,
+      materialColorIntensity: 0.72,
       groundOffset: -0.62,
       visualGroundOffset: -2.4
     },
@@ -146,6 +150,88 @@ export const enemyModelAssets = {
       groundOffset: -1.4,
       visualGroundOffset: -3.1
     }
+  ],
+  // Mech review sizing is tuned per model after Debug Mode checks.
+  mechs: [
+    {
+      id: 'astro-scout-toilet',
+      url: new URL('../../assets/models/mech/astro_scout_toilet.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'camera-mech',
+      url: new URL('../../assets/models/mech/camera_mech.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      visualYawOffset: Math.PI / 2,
+      groundOffset: -0.4
+    },
+    {
+      id: 'chicken-mech',
+      url: new URL('../../assets/models/mech/chicken_6_-_mech.glb', import.meta.url).href,
+      targetMaxDimension: 10,
+      hitboxHeightMultiplier: 0.32,
+      hitboxWidthMultiplier: 0.35,
+      overheadHeightMultiplier: 0.42,
+      groundOffset: 0.08,
+      visualGroundOffset: -0.4
+    },
+    {
+      id: 'medium-mech-striker',
+      url: new URL('../../assets/models/mech/medium_mech_striker.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'mech-drone',
+      url: new URL('../../assets/models/mech/mech_drone.glb', import.meta.url).href,
+      targetMaxDimension: 1,
+      hitboxHeightMultiplier: 3,
+      hitboxWidthMultiplier: 4,
+      overheadHeightMultiplier: 3,
+      groundOffset: -0.4,
+      visualGroundOffset: -2.0
+    },
+    {
+      id: 'primeops-mech',
+      url: new URL('../../assets/models/mech/primeops_mech.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      hitboxHeightMultiplier: 1.5,
+      overheadHeightMultiplier: 1.5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'sonia-mech',
+      url: new URL('../../assets/models/mech/sonia_mech.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'titan-speakerman',
+      url: new URL('../../assets/models/mech/titan_speakerman.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'upgraded-camera-mech',
+      url: new URL('../../assets/models/mech/upgraded_camera_mech.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'upgraded-titan-camera-man',
+      url: new URL('../../assets/models/mech/upgraded_titan_camera_man.glb', import.meta.url).href,
+      targetMaxDimension: 5,
+      groundOffset: -0.4
+    },
+    {
+      id: 'walker-mech',
+      url: new URL('../../assets/models/mech/walker_mech.glb', import.meta.url).href,
+      targetMaxDimension: 1 / 15,
+      hitboxHeightMultiplier: 10,
+      hitboxWidthMultiplier: 10,
+      groundOffset: -0.4
+    }
   ]
 };
 
@@ -154,6 +240,7 @@ export const preparationUiAssets = {
   gold: new URL('../../assets/images/gold.png', import.meta.url).href,
   rubi: new URL('../../assets/images/rubi.png', import.meta.url).href,
   leftArrow: new URL('../../assets/images/left-arrow.png', import.meta.url).href,
+  levelUp: new URL('../../assets/images/levelup2.png', import.meta.url).href,
   rightArrow: new URL('../../assets/images/right-arrow.png', import.meta.url).href,
   startIcon: new URL('../../assets/images/start-game2.png', import.meta.url).href,
   startButton: new URL('../../assets/images/start.png', import.meta.url).href,
@@ -169,6 +256,7 @@ export const mainHudAssets = {
   settings: new URL('../../assets/images/stages/menu2.png', import.meta.url).href,
   pause: new URL('../../assets/images/stages/menu3.png', import.meta.url).href,
   grenade: new URL('../../assets/images/stages/grenade.png', import.meta.url).href,
+  jacket: new URL('../../assets/images/stages/jacket.png', import.meta.url).href,
   magazine: new URL('../../assets/images/stages/magazine.png', import.meta.url).href,
   player: new URL('../../assets/images/stages/player.png', import.meta.url).href,
   potionDex: new URL('../../assets/images/stages/potion-dex.png', import.meta.url).href,

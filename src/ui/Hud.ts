@@ -1,21 +1,25 @@
 import {
   ActiveEffectSnapshot,
   BarricadeSnapshot,
+  GameSettings,
   MAX_TURRET_SLOTS,
+  MonsterType,
   PreparationSnapshot,
   PreparationSoldier,
   PreparationTurret,
   PreparationWeapon,
   SoldierHealthSnapshot,
   TurretSnapshot,
-  Upgrade
+  Upgrade,
+  ZombieMaterialMode
 } from '../game/types';
 import {
   hudAssets,
   imageAssets,
   introAssets,
   mainHudAssets,
-  preparationUiAssets
+  preparationUiAssets,
+  upgradeAssets
 } from '../game/AssetUrls';
 import type { EnemyHealthBar } from '../game/Enemy';
 
@@ -76,11 +80,20 @@ interface PreparationHandlers {
   onPrevWeapon: () => void;
   onNextWeapon: () => void;
   onEquipWeapon: () => void;
+  onLevelUpSoldier: () => void;
+  onLevelUpWeapon: () => void;
+  onResetWeapons: () => void;
   onHireSoldier: () => void;
   onHireTurret: () => void;
   onFireTurret: () => void;
+  onResetPersonnel: () => void;
   onBuyItem: (itemId: string) => void;
   onResetItems: () => void;
+}
+
+interface SettingsHandlers {
+  onChange: (settings: GameSettings) => void;
+  onResume: () => void;
 }
 
 interface DerivedPreparationStats {
@@ -96,6 +109,16 @@ interface DerivedPreparationStats {
   criticalChance: number;
 }
 
+interface DerivedPreparationTurretStats {
+  str: number;
+  dex: number;
+  int: number;
+  damage: number;
+  fireRate: number;
+  criticalChance: number;
+  maxShield: number;
+}
+
 interface ClearReward {
   gold: number;
   rubi: number;
@@ -108,6 +131,7 @@ export class Hud {
   private readonly overlay: HTMLDivElement;
   private readonly crosshair: HTMLDivElement;
   private readonly resizeObserver: ResizeObserver | null;
+  private mainCrosshairMark: HTMLDivElement | null = null;
 
   constructor(root: HTMLElement) {
     this.shell = document.createElement('div');
@@ -141,6 +165,20 @@ export class Hud {
 
   update(state: HudState): void {
     this.stats.innerHTML = this.renderMainHud(state);
+    this.mainCrosshairMark = this.stats.querySelector<HTMLDivElement>('.main-crosshair-mark');
+  }
+
+  updateAim(aimX: number, aimY: number, crosshairPulse: number): void {
+    if (!this.mainCrosshairMark?.isConnected) {
+      this.mainCrosshairMark = this.stats.querySelector<HTMLDivElement>('.main-crosshair-mark');
+    }
+    if (!this.mainCrosshairMark) return;
+
+    this.mainCrosshairMark.style.left = `${50 + aimX * 50}%`;
+    this.mainCrosshairMark.style.top = `${50 - aimY * 50}%`;
+    const active = crosshairPulse > 0;
+    this.mainCrosshairMark.classList.toggle('active', active);
+    this.mainCrosshairMark.classList.toggle('idle', !active);
   }
 
   private syncShellMetrics(): void {
@@ -158,6 +196,7 @@ export class Hud {
     const waveRemaining = Math.max(0, state.waveRemaining);
     const gold = state.loadout.gold;
     const rubi = state.loadout.rubi;
+    const crosshairActive = state.crosshairPulse > 0;
     const barricadePercent = Math.min(
       100,
       Math.max(0, (state.barricade.health / Math.max(1, state.barricade.maxHealth)) * 100)
@@ -194,9 +233,15 @@ export class Hud {
         </div>
 
         <div
-          class="main-crosshair-mark"
-          style="left: ${50 + state.aimX * 50}%; top: ${50 - state.aimY * 50}%; --crosshair-pulse: ${state.crosshairPulse.toFixed(3)}; --crosshair-color: ${state.crosshairPulse > 0 ? 'rgba(255, 38, 38, 0.95)' : 'rgba(72, 238, 226, 0.52)'}; --crosshair-dot-color: ${state.crosshairPulse > 0 ? '#ff2626' : '#42eee4'}"
-        ></div>
+          class="main-crosshair-mark ${crosshairActive ? 'active' : 'idle'}"
+          style="left: ${50 + state.aimX * 50}%; top: ${50 - state.aimY * 50}%;"
+        >
+          <span class="crosshair-line crosshair-line-top"></span>
+          <span class="crosshair-line crosshair-line-right"></span>
+          <span class="crosshair-line crosshair-line-bottom"></span>
+          <span class="crosshair-line crosshair-line-left"></span>
+          <span class="crosshair-dot"></span>
+        </div>
 
         ${this.renderEnemyHealthBars(state.enemyHealthBars)}
 
@@ -330,20 +375,62 @@ export class Hud {
   }
 
   private renderActiveEffects(effects: ActiveEffectSnapshot[]): string {
-    if (effects.length === 0) return '';
+    const visibleEffects = effects.map(effect => ({
+      ...effect,
+      image: this.resolveActiveEffectImage(effect)
+    }));
+
+    if (visibleEffects.length === 0) return '';
 
     return `
       <div class="main-active-effects">
-        ${effects
-          .map(effect => `
-            <span class="main-active-effect" title="${effect.label}">
-              <img src="${effect.image}" alt="${effect.label}" />
+        ${visibleEffects
+          .map(effect => {
+            const image = effect.image
+              ? `<img src="${effect.image}" alt="${effect.label}" />`
+              : `<em>${this.getActiveEffectFallback(effect.label)}</em>`;
+
+            return `
+            <span class="main-active-effect${effect.image ? '' : ' iconless'}" title="${effect.label}">
+              ${image}
               ${typeof effect.seconds === 'number' ? `<b>${Math.ceil(effect.seconds)}</b>` : ''}
             </span>
-          `)
+          `;
+          })
           .join('')}
       </div>
     `;
+  }
+
+  private resolveActiveEffectImage(effect: ActiveEffectSnapshot): string {
+    const id = effect.id.toLowerCase();
+    const label = effect.label.toLowerCase();
+
+    if (id === 'jacket') return mainHudAssets.jacket;
+    if (id.includes('potion-health')) return mainHudAssets.potionHealth;
+    if (id.includes('potion-dex')) return mainHudAssets.potionDex;
+    if (id.includes('potion-int')) return mainHudAssets.potionInt;
+    if (id.endsWith('-damage') || label.includes('hot rounds')) return upgradeAssets.hotRounds;
+    if (id.endsWith('-firerate') || label.includes('light trigger')) {
+      return upgradeAssets.lightTrigger;
+    }
+    if (id.endsWith('-magazine') || label.includes('extended mag')) return upgradeAssets.extendedMag;
+    if (id.endsWith('-defense') || label.includes('reinforced nest')) {
+      return upgradeAssets.reinforcedNest;
+    }
+    if (id.endsWith('-maxhealth') || label.includes('field kit')) return upgradeAssets.fieldKit;
+    if (id.endsWith('-reloadspeed') || label.includes('fast hands')) return upgradeAssets.fastHands;
+
+    return effect.image;
+  }
+
+  private getActiveEffectFallback(label: string): string {
+    return label
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(part => part[0]?.toUpperCase() ?? '')
+      .join('');
   }
 
   private renderMainTurrets(turrets: TurretSnapshot[]): string {
@@ -517,6 +604,7 @@ export class Hud {
       ? state.weapons.find(candidate => candidate.id === soldier.equippedWeaponId) ?? weapon
       : weapon;
     const derivedStats = soldier ? this.getDerivedPreparationStats(soldier, equippedWeapon) : null;
+    const derivedTurretStats = selectedTurret ? this.getDerivedTurretStats(selectedTurret) : null;
     const hiredCount = state.soldiers.filter(candidate => candidate.hired).length;
     const isRequiredSoldier = soldier?.id === 'anais';
     const selectedName = soldier?.name ?? selectedTurret?.name ?? '';
@@ -528,7 +616,13 @@ export class Hud {
           dex: Math.round(derivedStats?.dex ?? soldier.stats.dex),
           int: Math.round(derivedStats?.int ?? soldier.stats.int)
         }
-      : selectedTurret?.stats ?? { str: 0, dex: 0, int: 0 };
+      : derivedTurretStats
+        ? {
+            str: Math.round(derivedTurretStats.str),
+            dex: Math.round(derivedTurretStats.dex),
+            int: Math.round(derivedTurretStats.int)
+          }
+        : { str: 0, dex: 0, int: 0 };
 
     this.overlay.className = 'overlay visible preparation-overlay';
     this.overlay.innerHTML = `
@@ -551,7 +645,15 @@ export class Hud {
         </header>
 
         <section class="prep-soldier-zone">
-          <h2>Soldiers <span>(${hiredCount}/5)</span></h2>
+          <h2>
+            <span>Soldiers <span>(${hiredCount}/5)</span></span>
+            <button class="prep-level-up prep-level-up-soldier" type="button" aria-label="Level up ${selectedTurret ? 'turret' : 'soldier'}" title="Level up ${selectedTurret ? 'turret' : 'soldier'} - 5 Rubi">
+              <img src="${preparationUiAssets.levelUp}" alt="Level up" />
+            </button>
+            <button class="prep-reset-soldiers" type="button" aria-label="Reset soldiers">
+              <img src="${preparationUiAssets.reset}" alt="Reset" />
+            </button>
+          </h2>
           <div class="prep-soldier-card">
             <button class="prep-arrow prep-prev-soldier" type="button" aria-label="Previous soldier">
               <img src="${preparationUiAssets.leftArrow}" alt="" />
@@ -564,12 +666,12 @@ export class Hud {
               soldier && derivedStats
                 ? this.renderPreparationInfoPanel(soldier, equippedWeapon, derivedStats)
                 : selectedTurret
-                  ? this.renderPreparationTurretInfoPanel(selectedTurret)
+                  ? this.renderPreparationTurretInfoPanel(selectedTurret, derivedTurretStats ?? this.getDerivedTurretStats(selectedTurret))
                   : ''
             }
           </div>
           <div class="prep-soldier-name">
-            <strong>${selectedName}</strong>
+            <strong>${selectedName}${soldier ? ` (LV${soldier.level})` : selectedTurret ? ` (LV${selectedTurret.level})` : ''}</strong>
             <span>${selectedRole}</span>
           </div>
           <div class="prep-stats">
@@ -582,7 +684,11 @@ export class Hud {
               ? this.renderPreparationTurretActions(selectedTurret, state.turretSlots)
               : `
                 <button class="prep-hire prep-hire-soldier${soldier?.hired ? ' fire' : ''}${isRequiredSoldier ? ' locked' : ''}" type="button"${isRequiredSoldier ? ' disabled' : ''}>
-                  ${isRequiredSoldier ? 'Hired' : soldier?.hired ? `Fire ${Math.floor((soldier?.hireCost ?? 0) / 2)}` : `Hire ${soldier?.hireCost ?? 0}`}
+                  ${isRequiredSoldier
+                    ? 'Hired'
+                    : soldier?.hired
+                      ? `Fire +${Math.floor((soldier?.hireCost ?? 0) / 2)}`
+                      : `Hire -${soldier?.hireCost ?? 0}`}
                 </button>
               `
           }
@@ -608,7 +714,15 @@ export class Hud {
 
         <section class="prep-loadout-zone">
           <div class="prep-weapon-section${selectedTurret ? ' disabled' : ''}">
-            <h2>WEAPON</h2>
+            <h2>
+              <span>WEAPON</span>
+              <button class="prep-level-up prep-level-up-weapon" type="button" aria-label="Level up weapon" title="Level up weapon - 10 Rubi"${selectedTurret ? ' disabled' : ''}>
+                <img src="${preparationUiAssets.levelUp}" alt="Level up" />
+              </button>
+              <button class="prep-reset-weapons" type="button" aria-label="Reset weapons"${selectedTurret ? ' disabled' : ''}>
+                <img src="${preparationUiAssets.reset}" alt="Reset" />
+              </button>
+            </h2>
             <div class="prep-weapon-body">
               <button class="prep-arrow prep-prev-weapon" type="button" aria-label="Previous weapon"${selectedTurret ? ' disabled' : ''}>
                 <img src="${preparationUiAssets.leftArrow}" alt="" />
@@ -618,9 +732,9 @@ export class Hud {
                   ${selectedTurret ? `<img src="${selectedTurret.image}" alt="${selectedTurret.name}" />` : `<img src="${weapon.image}" alt="${weapon.name}" />`}
                 </button>
                 <div class="prep-weapon-copy">
-                  <strong>${selectedTurret ? 'FIXED TURRET WEAPON' : weapon.name}</strong>
+                  <strong>${selectedTurret ? 'FIXED TURRET WEAPON' : `${weapon.name} (LV${weapon.level})`}</strong>
                   <span>${selectedTurret ? 'Turrets do not equip soldier weapons.' : weapon.summary}</span>
-                  <small>${selectedTurret ? `${selectedTurret.damage} damage - ${selectedTurret.fireRate} speed` : `${weapon.magazineSize} rounds - ${weapon.trait}`}</small>
+                  <small>${selectedTurret && derivedTurretStats ? `ATK ${this.formatDecimal(derivedTurretStats.damage)} / SPD ${this.formatDecimal(derivedTurretStats.fireRate)} - SHIELD ${derivedTurretStats.maxShield}` : `ATK ${this.formatDecimal(this.getWeaponLevelDamage(weapon))} / SPD ${this.formatDecimal(this.getWeaponLevelFireRate(weapon))} - ${weapon.magazineSize} rounds - ${weapon.trait}`}</small>
                 </div>
               </div>
               <button class="prep-arrow prep-next-weapon" type="button" aria-label="Next weapon"${selectedTurret ? ' disabled' : ''}>
@@ -678,6 +792,15 @@ export class Hud {
       .querySelector<HTMLButtonElement>('.prep-weapon-card')
       ?.addEventListener('click', handlers.onEquipWeapon, { once: true });
     this.overlay
+      .querySelector<HTMLButtonElement>('.prep-level-up-soldier')
+      ?.addEventListener('click', handlers.onLevelUpSoldier, { once: true });
+    this.overlay
+      .querySelector<HTMLButtonElement>('.prep-level-up-weapon')
+      ?.addEventListener('click', handlers.onLevelUpWeapon, { once: true });
+    this.overlay
+      .querySelector<HTMLButtonElement>('.prep-reset-weapons')
+      ?.addEventListener('click', handlers.onResetWeapons, { once: true });
+    this.overlay
       .querySelector<HTMLButtonElement>('.prep-hire-soldier')
       ?.addEventListener('click', handlers.onHireSoldier, { once: true });
     this.overlay
@@ -686,6 +809,9 @@ export class Hud {
     this.overlay
       .querySelector<HTMLButtonElement>('.prep-fire-turret')
       ?.addEventListener('click', handlers.onFireTurret, { once: true });
+    this.overlay
+      .querySelector<HTMLButtonElement>('.prep-reset-soldiers')
+      ?.addEventListener('click', handlers.onResetPersonnel, { once: true });
     for (const itemButton of this.overlay.querySelectorAll<HTMLButtonElement>('.prep-item-card')) {
       itemButton.addEventListener('click', () => handlers.onBuyItem(itemButton.dataset.itemId ?? ''), {
         once: true
@@ -732,8 +858,10 @@ export class Hud {
     reward: ClearReward,
     hasNextStage: boolean,
     onNext: () => void,
-    onInfinite?: () => void
+    onInfinite?: () => void,
+    primaryLabel?: string
   ): void {
+    const nextLabel = primaryLabel ?? (hasNextStage ? 'Next Stage' : 'Exit');
     this.overlay.className = 'overlay visible';
     this.overlay.innerHTML = `
       <section class="panel stage-clear-panel">
@@ -742,10 +870,10 @@ export class Hud {
         <p class="clear-reward">+${this.formatNumber(reward.gold)} Gold / +${reward.rubi} Rubi</p>
         <p>${hasNextStage ? 'Next stage begins with stronger zombies.' : 'All prepared stages are cleared.'}</p>
         ${hasNextStage || !onInfinite
-          ? `<button class="stage-next" type="button">${hasNextStage ? 'Next Stage' : 'Title'}</button>`
+          ? `<button class="stage-next" type="button">${nextLabel}</button>`
           : `
             <div class="stage-clear-actions">
-              <button class="stage-title" type="button">Return to Title</button>
+              <button class="stage-title" type="button">${nextLabel}</button>
               <button class="stage-infinite" type="button">Infinite War</button>
             </div>
           `}
@@ -772,6 +900,123 @@ export class Hud {
     this.overlay.querySelector('button')?.addEventListener('click', onResume, {
       once: true
     });
+  }
+
+  showSettings(settings: GameSettings, handlers: SettingsHandlers): void {
+    this.overlay.className = 'overlay visible';
+    this.overlay.innerHTML = `
+      <section class="panel settings-panel">
+        <h2>SETTINGS</h2>
+        <div class="settings-grid">
+          <label class="setting-row">
+            <span>Monster Type</span>
+            <select class="setting-input" data-setting="monsterType">
+              ${this.renderMonsterTypeOption('dummy', 'Dummy', settings.monsterType)}
+              ${this.renderMonsterTypeOption('mech', 'Mech', settings.monsterType)}
+              ${this.renderMonsterTypeOption('zombie', 'Zombie', settings.monsterType)}
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Monster Texture</span>
+            <select class="setting-input" data-setting="zombieMaterialMode">
+              ${this.renderMaterialOption('shiny-metal', 'Shiny Metal', settings.zombieMaterialMode)}
+              ${this.renderMaterialOption('plain-metal', 'Plain Metal', settings.zombieMaterialMode)}
+              ${this.renderMaterialOption('mesh-toon', 'MeshToon', settings.zombieMaterialMode)}
+              ${this.renderMaterialOption('mesh-lambert', 'MeshLambert', settings.zombieMaterialMode)}
+            </select>
+          </label>
+          <label class="setting-row">
+            <span>Monster / Spawn</span>
+            <input
+              class="setting-input"
+              data-setting="zombieSpawnBatchSize"
+              type="number"
+              min="1"
+              max="50"
+              step="1"
+              value="${settings.zombieSpawnBatchSize}"
+            />
+          </label>
+          ${this.renderSettingToggle('soundEnabled', 'Sound', settings.soundEnabled)}
+          ${this.renderSettingToggle('autoFire', 'Auto Fire', settings.autoFire)}
+          ${this.renderSettingToggle('autoTargeting', 'Auto Targeting', settings.autoTargeting)}
+          ${this.renderSettingToggle('randomBuffs', 'Random Buff', settings.randomBuffs)}
+          ${this.renderSettingToggle('infiniteWar', 'Infinite War', settings.infiniteWar)}
+          ${this.renderSettingToggle('infiniteLoop', 'Infinite Loop', settings.infiniteLoop)}
+        </div>
+        <button class="settings-resume" type="button">Resume</button>
+      </section>
+    `;
+
+    const emitChange = (event: Event): void => {
+      const material = this.overlay.querySelector<HTMLSelectElement>('[data-setting="zombieMaterialMode"]');
+      const monsterType = this.overlay.querySelector<HTMLSelectElement>('[data-setting="monsterType"]');
+      const batch = this.overlay.querySelector<HTMLInputElement>('[data-setting="zombieSpawnBatchSize"]');
+      const infiniteWar = this.overlay.querySelector<HTMLInputElement>('[data-setting="infiniteWar"]');
+      const infiniteLoop = this.overlay.querySelector<HTMLInputElement>('[data-setting="infiniteLoop"]');
+      const changedSetting = (event.currentTarget as HTMLElement | null)?.dataset.setting;
+      if (changedSetting === 'infiniteWar' && infiniteWar?.checked && infiniteLoop) {
+        infiniteLoop.checked = false;
+      }
+      if (changedSetting === 'infiniteLoop' && infiniteLoop?.checked && infiniteWar) {
+        infiniteWar.checked = false;
+      }
+      const readToggle = (id: keyof GameSettings): boolean =>
+        Boolean(this.overlay.querySelector<HTMLInputElement>(`[data-setting="${id}"]`)?.checked);
+
+      handlers.onChange({
+        zombieMaterialMode: (material?.value ?? settings.zombieMaterialMode) as ZombieMaterialMode,
+        monsterType: (monsterType?.value ?? settings.monsterType) as MonsterType,
+        zombieSpawnBatchSize: Math.max(1, Math.min(50, Number.parseInt(batch?.value ?? '2', 10) || 2)),
+        soundEnabled: readToggle('soundEnabled'),
+        autoFire: readToggle('autoFire'),
+        autoTargeting: readToggle('autoTargeting'),
+        randomBuffs: readToggle('randomBuffs'),
+        infiniteWar: readToggle('infiniteWar'),
+        infiniteLoop: readToggle('infiniteLoop')
+      });
+    };
+
+    for (const input of this.overlay.querySelectorAll<HTMLInputElement | HTMLSelectElement>('.setting-input')) {
+      input.addEventListener('change', emitChange);
+    }
+    this.overlay.querySelector<HTMLButtonElement>('.settings-resume')?.addEventListener('click', handlers.onResume, {
+      once: true
+    });
+  }
+
+  private renderMaterialOption(
+    value: ZombieMaterialMode,
+    label: string,
+    selected: ZombieMaterialMode
+  ): string {
+    return `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`;
+  }
+
+  private renderMonsterTypeOption(
+    value: MonsterType,
+    label: string,
+    selected: MonsterType
+  ): string {
+    return `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`;
+  }
+
+  private renderSettingToggle(
+    id: keyof GameSettings,
+    label: string,
+    checked: boolean
+  ): string {
+    return `
+      <label class="setting-row setting-toggle-row">
+        <span>${label}</span>
+        <input
+          class="setting-input setting-toggle"
+          data-setting="${id}"
+          type="checkbox"
+          ${checked ? 'checked' : ''}
+        />
+      </label>
+    `;
   }
 
   showMainMenu(handlers: {
@@ -915,6 +1160,41 @@ export class Hud {
     window.setTimeout(() => popup.remove(), 900);
   }
 
+  showExplosion(
+    xPercent: number,
+    yPercent: number,
+    variant: 'grenade' | 'air-strike' = 'grenade',
+    delayMs = 0
+  ): void {
+    window.setTimeout(() => {
+      const explosion = document.createElement('span');
+      explosion.className = `screen-explosion ${variant}`;
+      explosion.style.left = `${Math.max(-8, Math.min(108, xPercent))}%`;
+      explosion.style.top = `${Math.max(-8, Math.min(108, yPercent))}%`;
+      explosion.innerHTML = `
+        <i class="explosion-core"></i>
+        <i class="explosion-ring"></i>
+        <i class="explosion-sparks"></i>
+      `;
+      this.shell.append(explosion);
+      window.setTimeout(() => explosion.remove(), variant === 'air-strike' ? 980 : 760);
+    }, delayMs);
+  }
+
+  showAirStrikeExplosions(): void {
+    const blasts = [
+      [18, 32, 0], [42, 27, 120], [69, 34, 210], [84, 48, 330],
+      [31, 55, 430], [57, 50, 560], [75, 64, 680], [45, 69, 820],
+      [22, 74, 940], [88, 73, 1060]
+    ];
+
+    for (const [x, y, delay] of blasts) {
+      const jitterX = (Math.random() - 0.5) * 8;
+      const jitterY = (Math.random() - 0.5) * 7;
+      this.showExplosion(x + jitterX, y + jitterY, 'air-strike', delay);
+    }
+  }
+
   private showNameEntry(
     score: number,
     stage: number,
@@ -928,13 +1208,27 @@ export class Hud {
         <p class="gameover-score">Score ${this.formatNumber(score)}</p>
         <label class="rank-name-entry">
           <span>Name</span>
-          <input class="rank-name-input" type="text" maxlength="10" autocomplete="off" />
+          <input
+            class="rank-name-input"
+            type="text"
+            name="shelter-defence-rank-entry"
+            maxlength="10"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            aria-autocomplete="none"
+            readonly
+          />
         </label>
         <button class="rank-name-submit" type="button">OK</button>
       </section>
     `;
 
     const input = this.overlay.querySelector<HTMLInputElement>('.rank-name-input');
+    input?.setAttribute('autocomplete', 'off');
+    input?.addEventListener('focus', () => input.removeAttribute('readonly'), { once: true });
+    window.setTimeout(() => input?.removeAttribute('readonly'), 80);
     const submit = (): void => {
       const updated = this.addLeaderboardEntry(input?.value ?? '', score, stage);
       this.showTopRanks(onExit, updated, onRankOpen);
@@ -1040,10 +1334,10 @@ export class Hud {
     return `
       <div class="prep-turret-actions">
         <button class="prep-hire prep-hire-turret" type="button"${canHire ? '' : ' disabled'}>
-          Hire ${turret.hireCost} (${totalInstalled}/${turretSlots.length})
+          Hire -${turret.hireCost} (${totalInstalled}/${turretSlots.length})
         </button>
         <button class="prep-hire fire prep-fire-turret" type="button"${installedCount > 0 ? '' : ' disabled'}>
-          Fire ${Math.floor(turret.hireCost / 2)} (${installedCount})
+          Fire +${Math.floor(turret.hireCost / 2)} (${installedCount})
         </button>
       </div>
     `;
@@ -1053,9 +1347,12 @@ export class Hud {
     soldier: PreparationSoldier,
     weapon: PreparationWeapon
   ): DerivedPreparationStats {
-    const str = soldier.stats.str * weapon.statScale.str;
-    const dex = soldier.stats.dex * weapon.statScale.dex;
-    const int = soldier.stats.int * weapon.statScale.int;
+    const soldierLevelMultiplier = this.getLevelMultiplier(soldier.level);
+    const str = soldier.stats.str * soldierLevelMultiplier * weapon.statScale.str;
+    const dex = soldier.stats.dex * soldierLevelMultiplier * weapon.statScale.dex;
+    const int = soldier.stats.int * soldierLevelMultiplier * weapon.statScale.int;
+    const weaponDamage = this.getWeaponLevelDamage(weapon);
+    const weaponFireRate = this.getWeaponLevelFireRate(weapon);
     const damageMultiplier = str / 100;
     const speedMultiplier = dex / 100;
     const criticalMultiplier = int / 100;
@@ -1068,9 +1365,34 @@ export class Hud {
       damageMultiplier,
       speedMultiplier,
       criticalMultiplier,
-      damage: weapon.damage * damageMultiplier,
-      fireRate: weapon.fireRate * speedMultiplier,
+      damage: weaponDamage * damageMultiplier,
+      fireRate: weaponFireRate * speedMultiplier,
       criticalChance: Math.min(0.95, weapon.criticalChance * criticalMultiplier)
+    };
+  }
+
+  private getWeaponLevelDamage(weapon: PreparationWeapon): number {
+    return weapon.damage * this.getLevelMultiplier(weapon.level);
+  }
+
+  private getWeaponLevelFireRate(weapon: PreparationWeapon): number {
+    return weapon.fireRate * this.getLevelMultiplier(weapon.level);
+  }
+
+  private getLevelMultiplier(level: number): number {
+    return 1 + (Math.max(1, level) - 1) * 0.1;
+  }
+
+  private getDerivedTurretStats(turret: PreparationTurret): DerivedPreparationTurretStats {
+    const multiplier = this.getLevelMultiplier(turret.level);
+    return {
+      str: turret.stats.str * multiplier,
+      dex: turret.stats.dex * multiplier,
+      int: turret.stats.int * multiplier,
+      damage: turret.damage * multiplier,
+      fireRate: turret.fireRate * multiplier,
+      criticalChance: Math.min(0.95, turret.criticalChance * multiplier),
+      maxShield: Math.ceil(turret.maxShield * multiplier)
     };
   }
 
@@ -1089,20 +1411,20 @@ export class Hud {
           <span>DEX%</span><em>${this.formatScalePercent(weapon.statScale.dex)}</em>
           <span>INT%</span><em>${this.formatScalePercent(weapon.statScale.int)}</em>
           <span>MAG</span><em>${weapon.magazineSize}</em>
-          <span>DAMAGE</span><em>${this.formatDecimal(weapon.damage)}</em>
-          <span>SPEED</span><em>${this.formatDecimal(weapon.fireRate)}</em>
+          <span>DAMAGE</span><em>${this.formatDecimal(this.getWeaponLevelDamage(weapon))}</em>
+          <span>SPEED</span><em>${this.formatDecimal(this.getWeaponLevelFireRate(weapon))}</em>
           <span>CRIT</span><em>${this.formatPercent(weapon.criticalChance)}</em>
         </div>
 
         <div class="prep-info-block">
           <b>SOLDIER</b>
-          <span>STR</span><em>${soldier.stats.str}</em>
-          <span>DEX</span><em>${soldier.stats.dex}</em>
-          <span>INT</span><em>${soldier.stats.int}</em>
-          <span>HEALTH</span><em>${soldier.stats.str * 10}</em>
-          <span>DAMAGE%</span><em>${this.formatScalePercent(soldier.stats.str / 100)}</em>
-          <span>SPEED%</span><em>${this.formatScalePercent(soldier.stats.dex / 100)}</em>
-          <span>CRIT%</span><em>${this.formatScalePercent(soldier.stats.int / 100)}</em>
+          <span>STR</span><em>${this.formatDecimal(soldier.stats.str * this.getLevelMultiplier(soldier.level))}</em>
+          <span>DEX</span><em>${this.formatDecimal(soldier.stats.dex * this.getLevelMultiplier(soldier.level))}</em>
+          <span>INT</span><em>${this.formatDecimal(soldier.stats.int * this.getLevelMultiplier(soldier.level))}</em>
+          <span>HEALTH</span><em>${Math.ceil(soldier.stats.str * this.getLevelMultiplier(soldier.level)) * 10}</em>
+          <span>DAMAGE%</span><em>${this.formatScalePercent((soldier.stats.str * this.getLevelMultiplier(soldier.level)) / 100)}</em>
+          <span>SPEED%</span><em>${this.formatScalePercent((soldier.stats.dex * this.getLevelMultiplier(soldier.level)) / 100)}</em>
+          <span>CRIT%</span><em>${this.formatScalePercent((soldier.stats.int * this.getLevelMultiplier(soldier.level)) / 100)}</em>
         </div>
 
         <div class="prep-info-block final">
@@ -1119,20 +1441,23 @@ export class Hud {
     `;
   }
 
-  private renderPreparationTurretInfoPanel(turret: PreparationTurret): string {
+  private renderPreparationTurretInfoPanel(
+    turret: PreparationTurret,
+    derived: DerivedPreparationTurretStats
+  ): string {
     return `
       <aside class="prep-soldier-tooltip turret-tooltip">
-        <strong>${turret.name}</strong>
+        <strong>${turret.name} (LV${turret.level})</strong>
 
         <div class="prep-info-block">
           <b>WEAPON</b>
           <span>TYPE</span><em>GUN</em>
-          <span>STR</span><em>${turret.stats.str}</em>
-          <span>DEX</span><em>${turret.stats.dex}</em>
-          <span>INT</span><em>${turret.stats.int}</em>
-          <span>DAMAGE</span><em>${this.formatDecimal(turret.damage)}</em>
-          <span>SPEED</span><em>${this.formatDecimal(turret.fireRate)}</em>
-          <span>SHIELD</span><em>${turret.maxShield}</em>
+          <span>STR</span><em>${this.formatDecimal(derived.str)}</em>
+          <span>DEX</span><em>${this.formatDecimal(derived.dex)}</em>
+          <span>INT</span><em>${this.formatDecimal(derived.int)}</em>
+          <span>DAMAGE</span><em>${this.formatDecimal(derived.damage)}</em>
+          <span>SPEED</span><em>${this.formatDecimal(derived.fireRate)}</em>
+          <span>SHIELD</span><em>${derived.maxShield}</em>
         </div>
 
         <div class="prep-info-block empty">
@@ -1141,13 +1466,13 @@ export class Hud {
 
         <div class="prep-info-block final">
           <b>FINAL</b>
-          <span>STR</span><em>${turret.stats.str}</em>
-          <span>DEX</span><em>${turret.stats.dex}</em>
-          <span>INT</span><em>${turret.stats.int}</em>
-          <span>HEALTH</span><em>${turret.maxShield}</em>
-          <span>DAMAGE</span><em>${this.formatDecimal(turret.damage)}</em>
-          <span>SPEED</span><em>${this.formatDecimal(turret.fireRate)}</em>
-          <span>CRIT</span><em>-</em>
+          <span>STR</span><em>${this.formatDecimal(derived.str)}</em>
+          <span>DEX</span><em>${this.formatDecimal(derived.dex)}</em>
+          <span>INT</span><em>${this.formatDecimal(derived.int)}</em>
+          <span>HEALTH</span><em>${derived.maxShield}</em>
+          <span>DAMAGE</span><em>${this.formatDecimal(derived.damage)}</em>
+          <span>SPEED</span><em>${this.formatDecimal(derived.fireRate)}</em>
+          <span>CRIT</span><em>${this.formatPercent(derived.criticalChance)}</em>
         </div>
       </aside>
     `;

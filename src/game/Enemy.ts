@@ -7,23 +7,28 @@ import {
   Color,
   LinearSRGBColorSpace,
   Group,
+  Intersection,
+  MeshLambertMaterial,
   Material,
   MathUtils,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  MeshToonMaterial,
   Object3D,
   PerspectiveCamera,
   Raycaster,
   Scene,
   SphereGeometry,
   SRGBColorSpace,
+  Texture,
+  Vector2,
   Vector3
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { enemyModelAssets } from './AssetUrls';
-import { EnemyDefinition, EnemySnapshot } from './types';
+import { EnemyDefinition, EnemySnapshot, MonsterType, ZombieMaterialMode } from './types';
 
 const walkerDefinition: EnemyDefinition = {
   id: 'walker',
@@ -68,15 +73,22 @@ interface Enemy {
 
 interface EnemyModelVariant {
   id: string;
+  monsterType: MonsterType;
   url: string;
   targetMaxDimension?: number;
+  boundsMaxDimensionLimit?: number;
   tintColor?: string;
+  visualYawOffset?: number;
   groundOffset?: number;
   visualGroundOffset?: number;
   hitboxHeightMultiplier?: number;
   hitboxWidthMultiplier?: number;
   hitboxDepthMultiplier?: number;
   overheadHeightMultiplier?: number;
+  materialRoughness?: number;
+  materialMetalness?: number;
+  materialEnvMapIntensity?: number;
+  materialColorIntensity?: number;
   template: Object3D | null;
   animations: AnimationClip[];
   failed: boolean;
@@ -192,6 +204,13 @@ export interface EnemyRangeDamage {
   result: EnemyDamageResult;
 }
 
+export interface EnemyAreaDamage {
+  enemyId: number;
+  point: Vector3;
+  result: EnemyDamageResult;
+  amount: number;
+}
+
 export interface EnemyBarricadeTarget {
   health: number;
   z: number;
@@ -222,24 +241,62 @@ export class EnemyManager {
     opacity: 0,
     depthWrite: false
   });
-  private readonly zombieModelVariants: EnemyModelVariant[] = enemyModelAssets.zombies.map((asset, index) => ({
-    ...asset,
-    template: null,
-    animations: [],
-    failed: false,
-    visualTargetMaxDimension: asset.targetMaxDimension ?? this.zombieModelTargetMaxDimension,
-    debugName: `${index + 1}. ${asset.id}`
-  }));
+  private readonly enemyModelVariants: EnemyModelVariant[] = [
+    ...enemyModelAssets.zombies.map((asset, index) => ({
+      ...asset,
+      monsterType: 'zombie' as const,
+      template: null,
+      animations: [],
+      failed: false,
+      visualTargetMaxDimension: asset.targetMaxDimension ?? this.zombieModelTargetMaxDimension,
+      debugName: `${index + 1}. ${asset.id}`
+    })),
+    ...enemyModelAssets.mechs.map((asset, index) => ({
+      ...asset,
+      monsterType: 'mech' as const,
+      template: null,
+      animations: [],
+      failed: false,
+      visualTargetMaxDimension: asset.targetMaxDimension ?? 3.5,
+      debugName: `M${index + 1}. ${asset.id}`
+    }))
+  ];
+  private zombieMaterialMode: ZombieMaterialMode = 'plain-metal';
+  private monsterType: MonsterType = 'dummy';
+  private readonly loadingModelTypes = new Set<MonsterType>();
+  private readonly raycastHitMeshes: Mesh[] = [];
+  private readonly raycastHits: Intersection[] = [];
+  private readonly playerFlat = new Vector3();
+  private readonly enemyFlat = new Vector3();
+  private readonly targetFlat = new Vector3();
+  private readonly toTarget = new Vector3();
 
   constructor(private readonly scene: Scene) {
     this.gltfLoader.register((parser) =>
       new GLTFMaterialsPbrSpecularGlossinessExtension(parser as GltfParserLike)
     );
-    this.loadZombieModels();
+    this.loadEnemyModels(this.monsterType);
   }
 
   setDebugHitboxesVisible(visible: boolean): void {
     this.hitboxMaterial.opacity = visible ? 0.5 : 0;
+  }
+
+  setZombieMaterialMode(mode: ZombieMaterialMode): void {
+    this.zombieMaterialMode = mode;
+  }
+
+  setMonsterType(type: MonsterType): void {
+    this.monsterType = type;
+    this.loadEnemyModels(type);
+  }
+
+  isMonsterTypeReady(type = this.monsterType): boolean {
+    if (type === 'dummy') return true;
+
+    const variants = this.enemyModelVariants.filter(variant => variant.monsterType === type);
+    return variants.some(variant => variant.template && !variant.failed) ||
+      variants.every(variant => variant.failed);
   }
 
   spawn(position: Vector3, options: EnemySpawnOptions): void {
@@ -277,6 +334,7 @@ export class EnemyManager {
     for (const hitMesh of hitMeshes) {
       hitMesh.name = `enemy-hit-${id}`;
       this.bodyToEnemy.set(hitMesh.uuid, id);
+      this.raycastHitMeshes.push(hitMesh);
     }
 
     this.enemies.set(id, {
@@ -303,7 +361,7 @@ export class EnemyManager {
   }
 
   update(delta: number, target: EnemyAttackTarget, barricade?: EnemyBarricadeTarget): void {
-    const playerFlat = target.position.clone();
+    const playerFlat = this.playerFlat.copy(target.position);
     playerFlat.y = 0;
     const barricadeAlive = Boolean(barricade && barricade.health > 0);
 
@@ -323,16 +381,19 @@ export class EnemyManager {
         this.applyHitFlash(enemy, false);
       }
 
-      const enemyFlat = enemy.mesh.position.clone();
+      const enemyFlat = this.enemyFlat.copy(enemy.mesh.position);
       enemyFlat.y = 0;
-      const targetFlat = barricadeAlive && barricade
-        ? new Vector3(
-            MathUtils.clamp(enemyFlat.x, -barricade.halfWidth, barricade.halfWidth),
-            0,
-            barricade.z
-          )
-        : playerFlat;
-      const toTarget = targetFlat.clone().sub(enemyFlat);
+      const targetFlat = this.targetFlat;
+      if (barricadeAlive && barricade) {
+        targetFlat.set(
+          MathUtils.clamp(enemyFlat.x, -barricade.halfWidth, barricade.halfWidth),
+          0,
+          barricade.z
+        );
+      } else {
+        targetFlat.copy(playerFlat);
+      }
+      const toTarget = this.toTarget.copy(targetFlat).sub(enemyFlat);
       const distance = toTarget.length();
 
       if (distance > enemy.definition.attackRange) {
@@ -363,11 +424,13 @@ export class EnemyManager {
   }
 
   raycast(raycaster: Raycaster): EnemyHit | null {
-    const bodies = [...this.enemies.values()]
-      .filter((enemy) => enemy.state !== 'dead')
-      .flatMap((enemy) => enemy.hitMeshes);
-    const hits = raycaster.intersectObjects(bodies, false);
-    const first = hits[0];
+    this.raycastHits.length = 0;
+    raycaster.intersectObjects(this.raycastHitMeshes, false, this.raycastHits);
+    const first = this.raycastHits.find((hit) => {
+      const enemyId = this.bodyToEnemy.get(hit.object.uuid);
+      const enemy = enemyId ? this.enemies.get(enemyId) : undefined;
+      return Boolean(enemy && enemy.state !== 'dead');
+    });
 
     if (!first) return null;
 
@@ -412,6 +475,57 @@ export class EnemyManager {
       if (damaged >= maxTargets) break;
     }
     return damaged;
+  }
+
+  damageAround(
+    center: Vector3,
+    radius: number,
+    maxDamage: number,
+    minDamageRatio = 0.35,
+    maxTargets = Number.POSITIVE_INFINITY
+  ): EnemyAreaDamage[] {
+    const hits = [...this.enemies.values()]
+      .filter((enemy) => enemy.state !== 'dead')
+      .map((enemy) => {
+        const flatCenter = new Vector3(center.x, 0, center.z);
+        const flatEnemy = new Vector3(enemy.mesh.position.x, 0, enemy.mesh.position.z);
+        return {
+          enemy,
+          distance: flatEnemy.distanceTo(flatCenter)
+        };
+      })
+      .filter(({ distance }) => distance <= radius)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, maxTargets);
+
+    const results: EnemyAreaDamage[] = [];
+    for (const { enemy, distance } of hits) {
+      const falloff = 1 - MathUtils.clamp(distance / radius, 0, 1);
+      const damageRatio = minDamageRatio + (1 - minDamageRatio) * falloff;
+      const amount = maxDamage * damageRatio;
+      const result = this.damage(enemy.id, amount, false);
+      if (result === 'none') continue;
+
+      const point = enemy.mesh.position.clone();
+      point.y += this.getEnemyOverheadWorldHeight(enemy);
+      results.push({
+        enemyId: enemy.id,
+        point,
+        result,
+        amount
+      });
+    }
+
+    return results;
+  }
+
+  getAimImpactPoint(raycaster: Raycaster, fallbackDistance = 34): Vector3 {
+    const hit = this.raycast(raycaster);
+    if (hit) return hit.point.clone();
+
+    return raycaster.ray.origin
+      .clone()
+      .add(raycaster.ray.direction.clone().multiplyScalar(fallbackDistance));
   }
 
   hasEnemyInRange(minZ: number): boolean {
@@ -460,8 +574,10 @@ export class EnemyManager {
       for (const hitMesh of enemy.hitMeshes) {
         this.bodyToEnemy.delete(hitMesh.uuid);
       }
+      this.disposeEnemyMaterials(enemy);
     }
     this.enemies.clear();
+    this.raycastHitMeshes.length = 0;
     this.killed = 0;
   }
 
@@ -516,14 +632,74 @@ export class EnemyManager {
     return { x, y };
   }
 
+  getNearestTargetAim(
+    camera: PerspectiveCamera,
+    currentAim: Vector2
+  ): Vector2 | null {
+    let bestAim: Vector2 | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (const enemy of this.enemies.values()) {
+      if (enemy.state === 'dead') continue;
+
+      const aim = this.getEnemyTargetAim(camera, enemy);
+      if (!aim) continue;
+
+      const distanceToAim = aim.distanceToSquared(currentAim);
+      const distanceToPlayer = camera.position.distanceToSquared(enemy.mesh.position);
+      const score = distanceToAim + distanceToPlayer * 0.0008;
+      if (score < bestScore) {
+        bestScore = score;
+        bestAim = aim;
+      }
+    }
+
+    return bestAim;
+  }
+
+  private getEnemyTargetAim(camera: PerspectiveCamera, enemy: Enemy): Vector2 | null {
+    const overheadHeight = this.getEnemyOverheadWorldHeight(enemy);
+    const heightSamples = [0.52, 0.38, 0.68, 0.25, 0.82];
+    let nearestOffscreen: Vector2 | null = null;
+    let nearestOffscreenScore = Number.POSITIVE_INFINITY;
+
+    for (const heightSample of heightSamples) {
+      const point = enemy.mesh.position.clone();
+      point.y += overheadHeight * heightSample;
+      const projected = point.project(camera);
+      if (projected.z < -1 || projected.z > 1) continue;
+
+      const aim = new Vector2(projected.x, projected.y);
+      const absX = Math.abs(aim.x);
+      const absY = Math.abs(aim.y);
+      if (absX <= 1.05 && absY <= 1.05) {
+        return aim;
+      }
+
+      const offscreenScore = Math.max(0, absX - 1.05) + Math.max(0, absY - 1.05);
+      if (offscreenScore < nearestOffscreenScore) {
+        nearestOffscreenScore = offscreenScore;
+        nearestOffscreen = aim;
+      }
+    }
+
+    if (!nearestOffscreen || nearestOffscreenScore > 0.28) return null;
+    nearestOffscreen.x = MathUtils.clamp(nearestOffscreen.x, -0.96, 0.96);
+    nearestOffscreen.y = MathUtils.clamp(nearestOffscreen.y, -0.86, 0.86);
+    return nearestOffscreen;
+  }
+
   private getEnemyOverheadWorldHeight(enemy: Enemy): number {
     const localHeight = enemy.visualOverheadHeight ?? 2.85;
     return localHeight * enemy.mesh.scale.y;
   }
 
   getCount(): number {
-    return [...this.enemies.values()].filter((enemy) => enemy.state !== 'dead')
-      .length;
+    let count = 0;
+    for (const enemy of this.enemies.values()) {
+      if (enemy.state !== 'dead') count += 1;
+    }
+    return count;
   }
 
   private remove(enemyId: number): void {
@@ -533,8 +709,27 @@ export class EnemyManager {
     this.scene.remove(enemy.mesh);
     for (const hitMesh of enemy.hitMeshes) {
       this.bodyToEnemy.delete(hitMesh.uuid);
+      const index = this.raycastHitMeshes.indexOf(hitMesh);
+      if (index >= 0) {
+        this.raycastHitMeshes.splice(index, 1);
+      }
     }
+    this.disposeEnemyMaterials(enemy);
     this.enemies.delete(enemyId);
+  }
+
+  private disposeEnemyMaterials(enemy: Enemy): void {
+    const disposed = new Set<Material>();
+    for (const visualMesh of enemy.visualMeshes) {
+      const materials = Array.isArray(visualMesh.material)
+        ? visualMesh.material
+        : [visualMesh.material];
+      for (const material of materials) {
+        if (disposed.has(material)) continue;
+        material.dispose();
+        disposed.add(material);
+      }
+    }
   }
 
   private createMaterial(color: string): MeshStandardMaterial {
@@ -558,8 +753,13 @@ export class EnemyManager {
     return mesh;
   }
 
-  private loadZombieModels(): void {
-    for (const variant of this.zombieModelVariants) {
+  private loadEnemyModels(type: MonsterType): void {
+    if (type === 'dummy') return;
+    if (this.loadingModelTypes.has(type)) return;
+    this.loadingModelTypes.add(type);
+
+    for (const variant of this.enemyModelVariants) {
+      if (variant.monsterType !== type) continue;
       this.gltfLoader.load(
         variant.url,
         (gltf) => {
@@ -586,7 +786,7 @@ export class EnemyManager {
     modelLabel?: string;
     mixer?: AnimationMixer;
   } {
-    const variant = this.pickZombieModelVariant(modelVariantId, modelVariantIds);
+    const variant = this.pickEnemyModelVariant(modelVariantId, modelVariantIds);
     if (variant) {
       return this.createGltfEnemyModel(variant);
     }
@@ -594,12 +794,15 @@ export class EnemyManager {
     return this.createFallbackEnemyModel();
   }
 
-  private pickZombieModelVariant(
+  private pickEnemyModelVariant(
     modelVariantId?: string,
     modelVariantIds?: string[]
   ): EnemyModelVariant | null {
-    const loadedVariants = this.zombieModelVariants.filter(
-      (variant) => variant.template && !variant.failed
+    const loadedVariants = this.enemyModelVariants.filter(
+      (variant) =>
+        variant.monsterType === this.monsterType &&
+        variant.template &&
+        !variant.failed
     );
     if (loadedVariants.length === 0) return null;
 
@@ -632,7 +835,7 @@ export class EnemyManager {
     const visual = this.prepareZombieVisual(
       visualRoot,
       variant.visualTargetMaxDimension,
-      variant.tintColor
+      variant
     );
     const visualMeshes = visual.meshes;
     const visualBaseY = visualRoot.position.y;
@@ -723,9 +926,13 @@ export class EnemyManager {
   private prepareZombieVisual(
     visualRoot: Object3D,
     targetMaxDimension: number,
-    tintColor?: string
+    variant: EnemyModelVariant
   ): { meshes: Mesh[]; size: Vector3 } {
-    const box = new Box3().setFromObject(visualRoot);
+    if (variant.visualYawOffset) {
+      visualRoot.rotation.y += variant.visualYawOffset;
+    }
+
+    const box = this.getVisualBounds(visualRoot, variant);
     const size = box.getSize(new Vector3());
     const center = box.getCenter(new Vector3());
     const maxDimension = Math.max(size.x, size.y, size.z);
@@ -746,17 +953,120 @@ export class EnemyManager {
 
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       const clonedMaterials = materials.map((material) => {
-        const cloned = material.clone();
+        const cloned = this.createDisplayMaterial(material);
         cloned.transparent = true;
-        if (tintColor) {
-          this.applyMaterialTint(cloned, tintColor);
+        if (variant.tintColor) {
+          this.applyMaterialTint(cloned, variant.tintColor);
         }
+        this.applyVariantMaterialTuning(cloned, variant);
         return cloned;
       });
       object.material = Array.isArray(object.material) ? clonedMaterials : clonedMaterials[0];
     });
 
     return { meshes: visualMeshes, size: visualSize };
+  }
+
+  private getVisualBounds(visualRoot: Object3D, variant: EnemyModelVariant): Box3 {
+    const fullBox = new Box3().setFromObject(visualRoot);
+    const boundsMaxDimensionLimit = variant.boundsMaxDimensionLimit;
+    if (typeof boundsMaxDimensionLimit !== 'number') {
+      return fullBox;
+    }
+
+    const filteredBox = new Box3();
+    let accepted = 0;
+    visualRoot.updateMatrixWorld(true);
+    visualRoot.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+
+      const meshBox = new Box3().setFromObject(object);
+      const meshSize = meshBox.getSize(new Vector3());
+      const meshMaxDimension = Math.max(meshSize.x, meshSize.y, meshSize.z);
+      if (meshMaxDimension > boundsMaxDimensionLimit) return;
+
+      filteredBox.union(meshBox);
+      accepted += 1;
+    });
+
+    return accepted > 0 ? filteredBox : fullBox;
+  }
+
+  private applyVariantMaterialTuning(material: Material, variant: EnemyModelVariant): void {
+    const tunable = material as Material & {
+      color?: { multiplyScalar: (scale: number) => void };
+      envMapIntensity?: number;
+      metalness?: number;
+      roughness?: number;
+    };
+
+    if (typeof variant.materialRoughness === 'number') {
+      tunable.roughness = variant.materialRoughness;
+    }
+
+    if (typeof variant.materialMetalness === 'number') {
+      tunable.metalness = variant.materialMetalness;
+    }
+
+    if (typeof variant.materialEnvMapIntensity === 'number') {
+      tunable.envMapIntensity = variant.materialEnvMapIntensity;
+    }
+
+    if (typeof variant.materialColorIntensity === 'number') {
+      tunable.color?.multiplyScalar(variant.materialColorIntensity);
+    }
+  }
+
+  private createDisplayMaterial(source: Material): Material {
+    const sourceMaterial = source as Material & {
+      color?: Color;
+      emissive?: Color;
+      map?: Texture | null;
+      metalness?: number;
+      opacity?: number;
+      roughness?: number;
+      transparent?: boolean;
+    };
+    const color = sourceMaterial.color?.clone() ?? new Color('#ffffff');
+    const map = sourceMaterial.map;
+    const opacity = sourceMaterial.opacity ?? 1;
+    const transparent = Boolean(sourceMaterial.transparent) || opacity < 1;
+
+    if (this.zombieMaterialMode === 'mesh-toon') {
+      return new MeshToonMaterial({
+        color,
+        map,
+        opacity,
+        transparent
+      });
+    }
+
+    if (this.zombieMaterialMode === 'mesh-lambert') {
+      return new MeshLambertMaterial({
+        color,
+        map,
+        opacity,
+        transparent
+      });
+    }
+
+    const cloned = source.clone() as Material & {
+      envMapIntensity?: number;
+      metalness?: number;
+      roughness?: number;
+    };
+
+    if (this.zombieMaterialMode === 'shiny-metal') {
+      cloned.metalness = Math.max(cloned.metalness ?? 0, 0.32);
+      cloned.roughness = Math.min(cloned.roughness ?? 0.48, 0.42);
+      cloned.envMapIntensity = 0.85;
+      return cloned;
+    }
+
+    cloned.metalness = 0;
+    cloned.roughness = Math.max(cloned.roughness ?? 0.86, 0.86);
+    cloned.envMapIntensity = 0.12;
+    return cloned;
   }
 
   private applyMaterialTint(material: Material, tintColor: string): void {

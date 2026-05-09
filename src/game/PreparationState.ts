@@ -10,13 +10,19 @@ import {
 
 const BASE_MAGAZINE_COUNT = 10;
 const REQUIRED_SOLDIER_ID = 'anais';
+const SOLDIER_LEVEL_UP_RUBI_COST = 5;
+const TURRET_LEVEL_UP_RUBI_COST = 5;
+const WEAPON_LEVEL_UP_RUBI_COST = 10;
 
 export class PreparationState {
   private selectedSoldierIndex = 0;
-  private selectedWeaponIndex = 3;
+  private selectedWeaponIndex = 1;
   private gold = 100000;
   private rubi = 200;
   private itemGoldSpent = 0;
+  private personnelGoldSpent = 0;
+  private soldierRubiSpent = 0;
+  private weaponRubiSpent = 0;
   private message = 'Prepare your squad before the next wave.';
   private readonly turretSlots: Array<string | null> = Array(MAX_TURRET_SLOTS).fill(null);
 
@@ -29,7 +35,8 @@ export class PreparationState {
       hired: true,
       hireCost: 0,
       stats: { str: 30, dex: 80, int: 115 },
-      equippedWeaponId: 'colt-m1911'
+      equippedWeaponId: 'milkor-mgl',
+      level: 1
     },
     {
       id: 'henry',
@@ -37,9 +44,10 @@ export class PreparationState {
       role: 'Barricade Engineer',
       image: characterAssets.henry,
       hired: false,
-      hireCost: 850,
+      hireCost: 17000,
       stats: { str: 40, dex: 60, int: 90 },
-      equippedWeaponId: 'bren-lmg'
+      equippedWeaponId: 'bren-lmg',
+      level: 1
     },
     {
       id: 'kim',
@@ -47,9 +55,10 @@ export class PreparationState {
       role: 'Forward Scout',
       image: characterAssets.kim,
       hired: false,
-      hireCost: 760,
+      hireCost: 15200,
       stats: { str: 30, dex: 120, int: 75 },
-      equippedWeaponId: 'mp5k'
+      equippedWeaponId: 'mp5k',
+      level: 1
     },
     {
       id: 'kino',
@@ -57,9 +66,10 @@ export class PreparationState {
       role: 'Signal Technician',
       image: characterAssets.kino,
       hired: false,
-      hireCost: 900,
+      hireCost: 18000,
       stats: { str: 35, dex: 85, int: 125 },
-      equippedWeaponId: 'm4-carbine'
+      equippedWeaponId: 'm4-carbine',
+      level: 1
     },
     {
       id: 'tomas',
@@ -67,9 +77,10 @@ export class PreparationState {
       role: 'Veteran Guard',
       image: characterAssets.tomas,
       hired: false,
-      hireCost: 1000,
+      hireCost: 20000,
       stats: { str: 40, dex: 70, int: 70 },
-      equippedWeaponId: 'shotgun'
+      equippedWeaponId: 'shotgun',
+      level: 1
     }
   ];
 
@@ -83,6 +94,7 @@ export class PreparationState {
       trait: 'High stability, heavy weight',
       statScale: { str: 1.3, dex: 1.25, int: 0.85 },
       damage: 55,
+      level: 1,
       fireRate: 10,
       criticalChance: 0.05,
       reloadTime: 2.4,
@@ -99,6 +111,7 @@ export class PreparationState {
       trait: 'Explosive area damage',
       statScale: { str: 1.45, dex: 0.55, int: 1.05 },
       damage: 100,
+      level: 1,
       fireRate: 5,
       criticalChance: 0.05,
       reloadTime: 3.1,
@@ -115,6 +128,7 @@ export class PreparationState {
       trait: 'Extreme range, slow fire',
       statScale: { str: 0.9, dex: 0.75, int: 1.5 },
       damage: 115,
+      level: 1,
       fireRate: 5,
       criticalChance: 0.25,
       reloadTime: 2.5,
@@ -131,6 +145,7 @@ export class PreparationState {
       trait: 'Fast handling',
       statScale: { str: 0.85, dex: 0.85, int: 1 },
       damage: 25,
+      level: 1,
       fireRate: 5,
       criticalChance: 0.1,
       reloadTime: 1.15,
@@ -147,6 +162,7 @@ export class PreparationState {
       trait: 'High impact sidearm',
       statScale: { str: 0.95, dex: 0.75, int: 1.05 },
       damage: 30,
+      level: 1,
       fireRate: 5,
       criticalChance: 0.1,
       reloadTime: 1.45,
@@ -163,6 +179,7 @@ export class PreparationState {
       trait: 'Very high fire rate',
       statScale: { str: 1.1, dex: 1.4, int: 0.8 },
       damage: 35,
+      level: 1,
       fireRate: 20,
       criticalChance: 0.05,
       reloadTime: 1.7,
@@ -179,6 +196,7 @@ export class PreparationState {
       trait: 'Close-range spread',
       statScale: { str: 1.4, dex: 0.6, int: 0.65 },
       damage: 90,
+      level: 1,
       fireRate: 5,
       criticalChance: 0.1,
       reloadTime: 2.2,
@@ -195,6 +213,7 @@ export class PreparationState {
       trait: 'Balanced range and fire rate',
       statScale: { str: 1.15, dex: 1.2, int: 1 },
       damage: 45,
+      level: 1,
       fireRate: 15,
       criticalChance: 0.1,
       reloadTime: 1.8,
@@ -216,7 +235,8 @@ export class PreparationState {
       damage: 80,
       fireRate: 2,
       criticalChance: 0.1,
-      maxShield: 200
+      maxShield: 200,
+      level: 1
     }
   ];
 
@@ -339,6 +359,64 @@ export class PreparationState {
     this.message = `${soldier.name} equipped ${weapon.name}.`;
   }
 
+  levelUpSelectedSoldier(): void {
+    if (!this.isSoldierSelected()) {
+      this.levelUpSelectedTurret();
+      return;
+    }
+
+    const soldier = this.currentSoldier();
+    if (!soldier.hired) {
+      this.message = `Hire ${soldier.name} before level up.`;
+      return;
+    }
+
+    if (this.rubi < SOLDIER_LEVEL_UP_RUBI_COST) {
+      this.message = `Need ${SOLDIER_LEVEL_UP_RUBI_COST - this.rubi} more Rubi to level up.`;
+      return;
+    }
+
+    soldier.level += 1;
+    this.rubi -= SOLDIER_LEVEL_UP_RUBI_COST;
+    this.soldierRubiSpent += SOLDIER_LEVEL_UP_RUBI_COST;
+    this.message = `${soldier.name} reached LV${soldier.level}.`;
+  }
+
+  private levelUpSelectedTurret(): void {
+    const turret = this.currentTurret();
+    const installedCount = this.turretSlots.filter(slot => slot === turret.id).length;
+    if (installedCount <= 0) {
+      this.message = `Install ${turret.name} before level up.`;
+      return;
+    }
+    if (this.rubi < TURRET_LEVEL_UP_RUBI_COST) {
+      this.message = `Need ${TURRET_LEVEL_UP_RUBI_COST - this.rubi} more Rubi to level up.`;
+      return;
+    }
+
+    turret.level += 1;
+    this.rubi -= TURRET_LEVEL_UP_RUBI_COST;
+    this.soldierRubiSpent += TURRET_LEVEL_UP_RUBI_COST;
+    this.message = `${turret.name} reached LV${turret.level}.`;
+  }
+
+  levelUpSelectedWeapon(): void {
+    if (!this.isSoldierSelected()) {
+      this.message = 'Turret weapons cannot be leveled here.';
+      return;
+    }
+    if (this.rubi < WEAPON_LEVEL_UP_RUBI_COST) {
+      this.message = `Need ${WEAPON_LEVEL_UP_RUBI_COST - this.rubi} more Rubi to level up.`;
+      return;
+    }
+
+    const weapon = this.currentWeapon();
+    weapon.level += 1;
+    this.rubi -= WEAPON_LEVEL_UP_RUBI_COST;
+    this.weaponRubiSpent += WEAPON_LEVEL_UP_RUBI_COST;
+    this.message = `${weapon.name} reached LV${weapon.level}.`;
+  }
+
   hireSelectedSoldier(): void {
     if (!this.isSoldierSelected()) {
       this.message = 'Select a soldier to hire or fire.';
@@ -356,11 +434,9 @@ export class PreparationState {
       const refund = Math.floor(soldier.hireCost / 2);
       soldier.hired = false;
       this.gold += refund;
-      const vest = this.items.find(candidate => candidate.id === 'jacket');
-      if (vest && vest.count > this.hiredCount()) {
-        vest.count = this.hiredCount();
-      }
-      this.message = `${soldier.name} fired. ${refund} gold refunded.`;
+      this.personnelGoldSpent = Math.max(0, this.personnelGoldSpent - refund);
+      const vestRefund = this.clampVestToHiredCount();
+      this.message = `${soldier.name} fired. ${refund + vestRefund} gold refunded.`;
       return;
     }
     if (this.gold < soldier.hireCost) {
@@ -368,11 +444,9 @@ export class PreparationState {
       return;
     }
     this.gold -= soldier.hireCost;
+    this.personnelGoldSpent += soldier.hireCost;
     soldier.hired = true;
-    const vest = this.items.find(candidate => candidate.id === 'jacket');
-    if (vest && vest.count > this.hiredCount()) {
-      vest.count = this.hiredCount();
-    }
+    this.clampVestToHiredCount();
     this.message = `${soldier.name} joined the squad.`;
   }
 
@@ -388,6 +462,7 @@ export class PreparationState {
     this.turretSlots[slotIndex] = null;
     const refund = Math.floor(turret.hireCost / 2);
     this.gold += refund;
+    this.personnelGoldSpent = Math.max(0, this.personnelGoldSpent - refund);
     this.message = `${turret.name} fired. ${refund} gold refunded.`;
   }
 
@@ -416,6 +491,7 @@ export class PreparationState {
     }
 
     this.gold -= turret.hireCost;
+    this.personnelGoldSpent += turret.hireCost;
     this.turretSlots[emptySlot] = turret.id;
     this.message = `${turret.name} installed in turret slot ${emptySlot + 1}.`;
   }
@@ -447,26 +523,72 @@ export class PreparationState {
     this.message = 'Items reset.';
   }
 
+  resetPersonnel(): void {
+    const refund = this.personnelGoldSpent;
+    const rubiRefund = this.soldierRubiSpent;
+    this.gold += refund;
+    this.rubi += rubiRefund;
+    this.personnelGoldSpent = 0;
+    this.soldierRubiSpent = 0;
+    this.selectedSoldierIndex = 0;
+    this.selectedWeaponIndex = 1;
+    this.turretSlots.fill(null);
+    this.resetSoldierDefaults();
+    const vestRefund = this.clampVestToHiredCount();
+    const totalRefund = refund + vestRefund;
+    this.message = totalRefund > 0 || rubiRefund > 0
+      ? `Soldiers reset. ${totalRefund} gold / ${rubiRefund} Rubi refunded.`
+      : 'Soldiers reset.';
+  }
+
+  resetWeapons(): void {
+    const refund = this.weaponRubiSpent;
+    for (const weapon of this.weapons) {
+      weapon.level = 1;
+    }
+    this.rubi += refund;
+    this.weaponRubiSpent = 0;
+    this.message = refund > 0
+      ? `Weapons reset. ${refund} Rubi refunded.`
+      : 'Weapons reset.';
+  }
+
   reset(): void {
     this.selectedSoldierIndex = 0;
-    this.selectedWeaponIndex = 3;
+    this.selectedWeaponIndex = 1;
     this.gold = 100000;
     this.rubi = 200;
     this.itemGoldSpent = 0;
+    this.personnelGoldSpent = 0;
+    this.soldierRubiSpent = 0;
+    this.weaponRubiSpent = 0;
     this.message = 'Prepare your squad before the next wave.';
     this.turretSlots.fill(null);
 
+    this.resetSoldierDefaults();
+    for (const weapon of this.weapons) {
+      weapon.level = 1;
+    }
+
+    for (const item of this.items) {
+      item.count = item.id === 'magazine' ? BASE_MAGAZINE_COUNT : 0;
+    }
+  }
+
+  private resetSoldierDefaults(): void {
     for (const soldier of this.soldiers) {
       soldier.hired = soldier.id === REQUIRED_SOLDIER_ID;
     }
-    this.soldiers[0].equippedWeaponId = 'colt-m1911';
+    this.soldiers[0].equippedWeaponId = 'milkor-mgl';
     this.soldiers[1].equippedWeaponId = 'bren-lmg';
     this.soldiers[2].equippedWeaponId = 'mp5k';
     this.soldiers[3].equippedWeaponId = 'm4-carbine';
     this.soldiers[4].equippedWeaponId = 'shotgun';
-
-    for (const item of this.items) {
-      item.count = item.id === 'magazine' ? BASE_MAGAZINE_COUNT : 0;
+    for (const soldier of this.soldiers) {
+      soldier.level = 1;
+    }
+    for (const turret of this.turrets) {
+      turret.level = 1;
     }
   }
 
@@ -516,6 +638,20 @@ export class PreparationState {
 
   private maxItemCount(item: PreparationItem): number {
     return item.id === 'jacket' ? this.hiredCount() : item.maxCount;
+  }
+
+  private clampVestToHiredCount(): number {
+    const vest = this.items.find(candidate => candidate.id === 'jacket');
+    if (!vest || vest.count <= this.hiredCount()) {
+      return 0;
+    }
+
+    const removedCount = vest.count - this.hiredCount();
+    const refund = removedCount * vest.priceGold;
+    vest.count = this.hiredCount();
+    this.gold += refund;
+    this.itemGoldSpent = Math.max(0, this.itemGoldSpent - refund);
+    return refund;
   }
 
   private hiredCount(): number {
