@@ -42,9 +42,16 @@ const walkerDefinition: EnemyDefinition = {
   radius: 0.7
 };
 
+export type EnemySpawnKind = 'normal' | 'midBoss' | 'bigBoss';
+
+export interface EnemyKillReward {
+  kind: EnemySpawnKind;
+}
+
 interface Enemy {
   id: number;
   definition: EnemyDefinition;
+  spawnKind: EnemySpawnKind;
   mesh: Group;
   hitMeshes: Mesh[];
   parts?: {
@@ -176,6 +183,7 @@ class GLTFMaterialsPbrSpecularGlossinessExtension {
 export interface EnemySpawnOptions {
   baseHealth: number;
   wave: number;
+  spawnKind?: EnemySpawnKind;
   healthMultiplier?: number;
   damageMultiplier?: number;
   sizeMultiplier?: number;
@@ -255,6 +263,7 @@ export class EnemyManager {
   private zombieMaterialMode: ZombieMaterialMode = 'plain-metal';
   private monsterType: MonsterType = 'dummy';
   private readonly loadingModelTypes = new Set<MonsterType>();
+  private killRewardHandler: ((reward: EnemyKillReward) => void) | null = null;
   private readonly raycastHitMeshes: Mesh[] = [];
   private readonly raycastHits: Intersection[] = [];
   private readonly playerFlat = new Vector3();
@@ -275,6 +284,10 @@ export class EnemyManager {
 
   setZombieMaterialMode(mode: ZombieMaterialMode): void {
     this.zombieMaterialMode = mode;
+  }
+
+  setKillRewardHandler(handler: ((reward: EnemyKillReward) => void) | null): void {
+    this.killRewardHandler = handler;
   }
 
   setMonsterType(type: MonsterType): void {
@@ -331,6 +344,7 @@ export class EnemyManager {
     this.enemies.set(id, {
       id,
       definition,
+      spawnKind: options.spawnKind ?? 'normal',
       mesh,
       hitMeshes,
       parts,
@@ -451,6 +465,7 @@ export class EnemyManager {
       enemy.deathTimer = 1.65;
       enemy.mesh.rotation.z = MathUtils.randFloatSpread(0.35);
       this.killed += 1;
+      this.killRewardHandler?.({ kind: enemy.spawnKind });
       return 'killed';
     }
 

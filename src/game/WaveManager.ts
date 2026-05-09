@@ -1,12 +1,12 @@
 import { MathUtils, Vector3 } from 'three';
 import { enemyModelAssets } from './AssetUrls';
-import { EnemyManager, EnemySpawnOptions } from './Enemy';
+import { EnemyManager, type EnemySpawnKind, type EnemySpawnOptions } from './Enemy';
 import { Player } from './Player';
 import { defaultStageRoadProfile, StageRoadProfile } from './StageRoadMask';
 import { MonsterType, WaveSnapshot } from './types';
 
 type WaveState = 'none' | 'waveComplete' | 'stageComplete';
-type SpawnKind = 'normal' | 'midBoss' | 'bigBoss';
+type SpawnKind = EnemySpawnKind;
 type WaveMode = 'stage' | 'infinite';
 
 interface SpawnRequest {
@@ -24,8 +24,8 @@ const DEBUG_SPAWN_INTERVAL = 1;
 const DEFAULT_SPAWN_BATCH_SIZE = 2;
 const INFINITE_SPAWN_INTERVAL = 0.35;
 const INFINITE_MIN_SPAWN_BATCH_SIZE = 6;
-const INFINITE_DIFFICULTY_INTERVAL = 60;
-const INFINITE_DIFFICULTY_MULTIPLIER = 1.2;
+const INFINITE_DIFFICULTY_INTERVAL = 10;
+const INFINITE_DIFFICULTY_MULTIPLIER = 1.1;
 const INFINITE_RESPAWN_THRESHOLD_RATIO = 0.1;
 const MAX_ACTIVE_DUMMY_ENEMIES = 140;
 const MAX_ACTIVE_GLB_ENEMIES = 60;
@@ -362,7 +362,9 @@ export class WaveManager {
           Math.floor(this.infiniteElapsed / INFINITE_DIFFICULTY_INTERVAL)
         )
       : 1;
-    const stageHealth = BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1);
+    const stageHealth = this.mode === 'infinite'
+      ? BASE_ZOMBIE_HEALTH
+      : BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1);
     const baseHealth = this.mode === 'infinite'
       ? stageHealth * infiniteScale
       : stageHealth;
@@ -379,7 +381,8 @@ export class WaveManager {
 
     return {
       baseHealth,
-      wave: this.mode === 'infinite' ? DEFAULT_WAVES_PER_STAGE : this.waveInStage,
+      wave: this.mode === 'infinite' ? 1 : this.waveInStage,
+      spawnKind: request.kind,
       healthMultiplier: bossScale[request.kind],
       damageMultiplier: bossScale[request.kind] * infiniteScale,
       sizeMultiplier: sizeScale[request.kind],

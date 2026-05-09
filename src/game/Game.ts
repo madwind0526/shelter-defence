@@ -18,7 +18,7 @@ import {
 } from 'three';
 import { AudioManager } from './AudioManager';
 import { imageAssets, mainHudAssets, upgradeAssets } from './AssetUrls';
-import { EnemyManager } from './Enemy';
+import { EnemyManager, type EnemyKillReward } from './Enemy';
 import { Input } from './Input';
 import { Player } from './Player';
 import { PreparationState } from './PreparationState';
@@ -190,6 +190,7 @@ export class Game {
     this.input = new Input(this.hud.getCanvasHost());
     this.configureRenderer();
     this.createWorld();
+    this.enemies.setKillRewardHandler((reward) => this.awardZombieKill(reward));
     this.bindEvents();
     this.applySettings();
     this.showIntro();
@@ -640,7 +641,6 @@ export class Game {
 
     this.grenadeCount -= 1;
     this.hud.showExplosion(50 + this.aim.x * 50, 50 - this.aim.y * 50, 'grenade');
-    const killedBefore = this.enemies.getSnapshot().killed;
     this.grenadeRaycaster.setFromCamera(this.aim, this.player.camera);
     const impact = this.enemies.getAimImpactPoint(this.grenadeRaycaster, 34);
     const results = this.enemies.damageAround(
@@ -653,7 +653,6 @@ export class Game {
     for (const result of results) {
       this.queueFloatingDamage(result.enemyId, result.point, result.amount, false);
     }
-    this.awardIndirectKills(this.enemies.getSnapshot().killed - killedBefore);
     this.audio.playWeaponShot('explosion');
   }
 
@@ -664,9 +663,7 @@ export class Game {
 
     this.airStrikeCount -= 1;
     this.hud.showAirStrikeExplosions();
-    const killedBefore = this.enemies.getSnapshot().killed;
     this.enemies.damageAll(AIR_STRIKE_DAMAGE);
-    this.awardIndirectKills(this.enemies.getSnapshot().killed - killedBefore);
     this.audio.playWeaponShot('fallingBomb');
     for (const delay of [280, 520, 760]) {
       window.setTimeout(() => this.audio.playWeaponShot('explosion'), delay);
@@ -749,10 +746,6 @@ export class Game {
         );
       }
 
-      if (outcome.result === 'killed') {
-        this.awardZombieKill();
-      }
-
       if (this.weapon.noReload && combat.ammo <= 0) {
         combat.ammo = combat.definition.magazineSize;
       } else if (combat.ammo <= 0 && this.startSoldierReload(combat)) {
@@ -817,11 +810,9 @@ export class Game {
         : (turret.damage ?? 80) * this.weapon.damageMultiplier * (critical ? 2 : 1);
       const fireRate =
         (turret.fireRate ?? 2) * this.weapon.fireRateMultiplier * this.getPotionFireRateMultiplier();
-      const killedBefore = this.enemies.getSnapshot().killed;
       const outcome = this.enemies.damageFirstInRange(damage, rangeZ);
       if (!outcome) continue;
 
-      this.awardIndirectKills(this.enemies.getSnapshot().killed - killedBefore);
       this.queueFloatingDamage(
         outcome.enemyId,
         outcome.point,
@@ -837,11 +828,16 @@ export class Game {
     }
   }
 
-  private awardZombieKill(): void {
+  private awardZombieKill(reward: EnemyKillReward): void {
     const scoreGain = 50 + Math.floor(Math.random() * 101);
     const goldGain = 20 + Math.floor(Math.random() * 61);
     this.score += scoreGain;
     this.preparation.addGold(goldGain);
+    if (reward.kind === 'midBoss') {
+      this.preparation.addRubi(this.randomInt(10, 20));
+    } else if (reward.kind === 'bigBoss') {
+      this.preparation.addRubi(this.randomInt(20, 40));
+    }
     this.maybeApplyInfiniteKillBuff();
   }
 
@@ -966,12 +962,6 @@ export class Game {
     const y = overhead?.y ?? (-fallback.y * 0.5 + 0.5) * 100;
     if (x >= -10 && x <= 110 && y >= -10 && y <= 110) {
       this.hud.showFloatingDamage(amount, x, y, critical);
-    }
-  }
-
-  private awardIndirectKills(count: number): void {
-    for (let i = 0; i < Math.max(0, count); i += 1) {
-      this.awardZombieKill();
     }
   }
 
