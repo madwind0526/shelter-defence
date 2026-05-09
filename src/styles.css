@@ -2002,6 +2002,34 @@ button {
   pointer-events: none;
 }
 
+.main-level-badge {
+  position: absolute;
+  z-index: 7;
+  display: block;
+  min-width: clamp(28px, calc(45px * var(--game-scale)), 45px);
+  padding: 1px clamp(3px, calc(5px * var(--game-scale)), 5px);
+  border: 1px solid rgba(255, 239, 83, 0.55);
+  border-radius: 999px;
+  background: rgba(2, 8, 12, 0.78);
+  color: #fff35c;
+  font-family: "DS Digital", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(9px, calc(15px * var(--game-scale)), 15px);
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: 0;
+  text-shadow:
+    0 1px 1px #000,
+    0 0 6px rgba(255, 239, 83, 0.55);
+  pointer-events: none;
+}
+
+.main-soldier-level {
+  left: 50%;
+  bottom: 2%;
+  transform: translateX(-50%);
+}
+
 .main-soldier-portrait i {
   display: none;
 }
@@ -2024,6 +2052,13 @@ button {
   height: 100%;
   object-fit: contain;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
+
+.main-weapon-level {
+  right: clamp(-4px, calc(-5px * var(--game-scale)), -2px);
+  top: clamp(-8px, calc(-10px * var(--game-scale)), -4px);
+  min-width: clamp(26px, calc(42px * var(--game-scale)), 42px);
+  font-size: clamp(8px, calc(13px * var(--game-scale)), 13px);
 }
 
 .main-ammo-box,
@@ -2262,6 +2297,17 @@ button {
 
 .main-side-turret.turret-side-right {
   right: 0;
+  transform: scaleX(-1);
+}
+
+.main-field-turret-level {
+  right: clamp(105px, calc(210px * var(--game-scale)), 210px);
+  top: clamp(122px, calc(300px * var(--game-scale)), 300px);
+  min-width: clamp(34px, calc(58px * var(--game-scale)), 58px);
+  font-size: clamp(10px, calc(18px * var(--game-scale)), 18px);
+}
+
+.main-side-turret.turret-side-right .main-field-turret-level {
   transform: scaleX(-1);
 }
 

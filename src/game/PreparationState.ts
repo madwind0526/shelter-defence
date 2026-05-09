@@ -10,9 +10,23 @@ import {
 
 const BASE_MAGAZINE_COUNT = 10;
 const REQUIRED_SOLDIER_ID = 'anais';
-const SOLDIER_LEVEL_UP_RUBI_COST = 5;
-const TURRET_LEVEL_UP_RUBI_COST = 5;
-const WEAPON_LEVEL_UP_RUBI_COST = 10;
+const LEVEL_COST_GROUP_SIZE = 10;
+const SOLDIER_LEVEL_UP_BASE_RUBI_COST = 5;
+const WEAPON_LEVEL_UP_BASE_RUBI_COST = 10;
+
+export function getSoldierLevelUpRubiCost(level: number): number {
+  return getTieredLevelUpRubiCost(level, SOLDIER_LEVEL_UP_BASE_RUBI_COST);
+}
+
+export function getWeaponLevelUpRubiCost(level: number): number {
+  return getTieredLevelUpRubiCost(level, WEAPON_LEVEL_UP_BASE_RUBI_COST);
+}
+
+function getTieredLevelUpRubiCost(level: number, baseCost: number): number {
+  const normalizedLevel = Math.max(1, Math.floor(level));
+  const tier = Math.floor((normalizedLevel - 1) / LEVEL_COST_GROUP_SIZE);
+  return baseCost + 10 * tier;
+}
 
 export class PreparationState {
   private selectedSoldierIndex = 0;
@@ -371,14 +385,15 @@ export class PreparationState {
       return;
     }
 
-    if (this.rubi < SOLDIER_LEVEL_UP_RUBI_COST) {
-      this.message = `Need ${SOLDIER_LEVEL_UP_RUBI_COST - this.rubi} more Rubi to level up.`;
+    const cost = getSoldierLevelUpRubiCost(soldier.level);
+    if (this.rubi < cost) {
+      this.message = `Need ${cost - this.rubi} more Rubi to level up.`;
       return;
     }
 
     soldier.level += 1;
-    this.rubi -= SOLDIER_LEVEL_UP_RUBI_COST;
-    this.soldierRubiSpent += SOLDIER_LEVEL_UP_RUBI_COST;
+    this.rubi -= cost;
+    this.soldierRubiSpent += cost;
     this.message = `${soldier.name} reached LV${soldier.level}.`;
   }
 
@@ -389,14 +404,15 @@ export class PreparationState {
       this.message = `Install ${turret.name} before level up.`;
       return;
     }
-    if (this.rubi < TURRET_LEVEL_UP_RUBI_COST) {
-      this.message = `Need ${TURRET_LEVEL_UP_RUBI_COST - this.rubi} more Rubi to level up.`;
+    const cost = getSoldierLevelUpRubiCost(turret.level);
+    if (this.rubi < cost) {
+      this.message = `Need ${cost - this.rubi} more Rubi to level up.`;
       return;
     }
 
     turret.level += 1;
-    this.rubi -= TURRET_LEVEL_UP_RUBI_COST;
-    this.soldierRubiSpent += TURRET_LEVEL_UP_RUBI_COST;
+    this.rubi -= cost;
+    this.soldierRubiSpent += cost;
     this.message = `${turret.name} reached LV${turret.level}.`;
   }
 
@@ -405,15 +421,16 @@ export class PreparationState {
       this.message = 'Turret weapons cannot be leveled here.';
       return;
     }
-    if (this.rubi < WEAPON_LEVEL_UP_RUBI_COST) {
-      this.message = `Need ${WEAPON_LEVEL_UP_RUBI_COST - this.rubi} more Rubi to level up.`;
+    const weapon = this.currentWeapon();
+    const cost = getWeaponLevelUpRubiCost(weapon.level);
+    if (this.rubi < cost) {
+      this.message = `Need ${cost - this.rubi} more Rubi to level up.`;
       return;
     }
 
-    const weapon = this.currentWeapon();
     weapon.level += 1;
-    this.rubi -= WEAPON_LEVEL_UP_RUBI_COST;
-    this.weaponRubiSpent += WEAPON_LEVEL_UP_RUBI_COST;
+    this.rubi -= cost;
+    this.weaponRubiSpent += cost;
     this.message = `${weapon.name} reached LV${weapon.level}.`;
   }
 

@@ -55,7 +55,7 @@ export class Input {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (['F1', 'F2', 'F3', 'F4', 'F5', 'Space'].includes(event.code)) {
+    if (['F1', 'F2', 'F3', 'F4', 'F5', 'F8', 'F12', 'Space'].includes(event.code)) {
       event.preventDefault();
     }
 

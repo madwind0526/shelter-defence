@@ -1101,6 +1101,16 @@ export class Game {
   }
 
   private handleMainControlHotkeys(): void {
+    if (this.input.consumeAction('F12')) {
+      this.resetToFreshIntro();
+      return;
+    }
+
+    if (this.input.consumeAction('F8')) {
+      this.openPreparationShortcut();
+      return;
+    }
+
     const actions: Array<[string, MainControlAction]> = [
       ['F1', 'menu'],
       ['F2', 'settings'],
@@ -1122,6 +1132,20 @@ export class Game {
         }
         return;
       }
+    }
+  }
+
+  private openPreparationShortcut(): void {
+    if (this.mode === 'playing' || this.mode === 'paused') {
+      this.stopLivingSoldierWeaponShots();
+      document.exitPointerLock();
+      this.pausedControl = null;
+      this.openPreparation(true);
+      return;
+    }
+
+    if (this.mode === 'ready') {
+      this.openPreparation(false);
     }
   }
 

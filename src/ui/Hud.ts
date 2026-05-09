@@ -21,6 +21,7 @@ import {
   preparationUiAssets,
   upgradeAssets
 } from '../game/AssetUrls';
+import { getSoldierLevelUpRubiCost, getWeaponLevelUpRubiCost } from '../game/PreparationState';
 import type { EnemyHealthBar } from '../game/Enemy';
 
 const leaderboardKey = 'shelter-defence-top-ranks';
@@ -338,10 +339,12 @@ export class Hud {
           <div class="main-soldier-row${isDead ? ' dead' : ''}">
             <span class="main-soldier-portrait" style="--health-percent: ${healthPercent}%; --health-color: ${healthColor}">
               <img src="${soldier.image}" alt="${soldier.name}" />
+              <b class="main-level-badge main-soldier-level">LV.${soldier.level}</b>
               <i style="--player-frame: url('${mainHudAssets.player}')"></i>
             </span>
             <span class="main-soldier-weapon">
               <img src="${weapon.image}" alt="${weapon.name}" />
+              <b class="main-level-badge main-weapon-level">LV.${weapon.level}</b>
             </span>
             <span class="main-ammo-box">
               <img src="${mainHudAssets.bullet}" alt="" />
@@ -469,6 +472,7 @@ export class Hud {
             src="${this.getMainTurretImage(turret)}"
             alt="${turret.name ?? ''}"
           />
+          ${side === 'right' ? `<b class="main-level-badge main-field-turret-level">LV.${turret.level ?? 1}</b>` : ''}
         </span>
       `;
     }).join('');
@@ -610,6 +614,12 @@ export class Hud {
     const selectedName = soldier?.name ?? selectedTurret?.name ?? '';
     const selectedRole = soldier?.role ?? selectedTurret?.name ?? '';
     const selectedImage = soldier?.image ?? selectedTurret?.image ?? '';
+    const soldierLevelCost = soldier
+      ? getSoldierLevelUpRubiCost(soldier.level)
+      : selectedTurret
+        ? getSoldierLevelUpRubiCost(selectedTurret.level)
+        : 0;
+    const weaponLevelCost = getWeaponLevelUpRubiCost(weapon.level);
     const selectedStats = soldier
       ? {
           str: Math.round(derivedStats?.str ?? soldier.stats.str),
@@ -647,7 +657,7 @@ export class Hud {
         <section class="prep-soldier-zone">
           <h2>
             <span>Soldiers <span>(${hiredCount}/5)</span></span>
-            <button class="prep-level-up prep-level-up-soldier" type="button" aria-label="Level up ${selectedTurret ? 'turret' : 'soldier'}" title="Level up ${selectedTurret ? 'turret' : 'soldier'} - 5 Rubi">
+            <button class="prep-level-up prep-level-up-soldier" type="button" aria-label="Level up ${selectedTurret ? 'turret' : 'soldier'}" title="Level up ${selectedTurret ? 'turret' : 'soldier'} - ${soldierLevelCost} Rubi">
               <img src="${preparationUiAssets.levelUp}" alt="Level up" />
             </button>
             <button class="prep-reset-soldiers" type="button" aria-label="Reset soldiers">
@@ -716,7 +726,7 @@ export class Hud {
           <div class="prep-weapon-section${selectedTurret ? ' disabled' : ''}">
             <h2>
               <span>WEAPON</span>
-              <button class="prep-level-up prep-level-up-weapon" type="button" aria-label="Level up weapon" title="Level up weapon - 10 Rubi"${selectedTurret ? ' disabled' : ''}>
+              <button class="prep-level-up prep-level-up-weapon" type="button" aria-label="Level up weapon" title="Level up weapon - ${weaponLevelCost} Rubi"${selectedTurret ? ' disabled' : ''}>
                 <img src="${preparationUiAssets.levelUp}" alt="Level up" />
               </button>
               <button class="prep-reset-weapons" type="button" aria-label="Reset weapons"${selectedTurret ? ' disabled' : ''}>
