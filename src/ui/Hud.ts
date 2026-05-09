@@ -87,7 +87,7 @@ interface PreparationHandlers {
   onHireTurret: () => void;
   onFireTurret: () => void;
   onResetPersonnel: () => void;
-  onBuyItem: (itemId: string) => void;
+  onBuyItem: (itemId: string, count?: number) => void;
   onResetItems: () => void;
 }
 
@@ -813,13 +813,48 @@ export class Hud {
       .querySelector<HTMLButtonElement>('.prep-reset-soldiers')
       ?.addEventListener('click', handlers.onResetPersonnel, { once: true });
     for (const itemButton of this.overlay.querySelectorAll<HTMLButtonElement>('.prep-item-card')) {
-      itemButton.addEventListener('click', () => handlers.onBuyItem(itemButton.dataset.itemId ?? ''), {
-        once: true
-      });
+      this.bindPreparationItemPurchase(itemButton, handlers);
     }
     this.overlay
       .querySelector<HTMLButtonElement>('.prep-reset-items')
       ?.addEventListener('click', handlers.onResetItems, { once: true });
+  }
+
+  private bindPreparationItemPurchase(
+    itemButton: HTMLButtonElement,
+    handlers: PreparationHandlers
+  ): void {
+    let repeatDelay = 0;
+    let repeatInterval = 0;
+    const itemId = itemButton.dataset.itemId ?? '';
+    const stopRepeat = (): void => {
+      window.clearTimeout(repeatDelay);
+      window.clearInterval(repeatInterval);
+      repeatDelay = 0;
+      repeatInterval = 0;
+      window.removeEventListener('pointerup', stopRepeat);
+      window.removeEventListener('pointercancel', stopRepeat);
+      window.removeEventListener('blur', stopRepeat);
+    };
+
+    itemButton.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      handlers.onBuyItem(itemId, 10);
+    });
+
+    itemButton.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      handlers.onBuyItem(itemId, 1);
+      stopRepeat();
+      window.addEventListener('pointerup', stopRepeat);
+      window.addEventListener('pointercancel', stopRepeat);
+      window.addEventListener('blur', stopRepeat);
+      repeatDelay = window.setTimeout(() => {
+        handlers.onBuyItem(itemId, 1);
+        repeatInterval = window.setInterval(() => handlers.onBuyItem(itemId, 1), 110);
+      }, 280);
+    });
   }
 
   showUpgrades(choices: Upgrade[], reward: ClearReward, onPick: (upgrade: Upgrade) => void): void {

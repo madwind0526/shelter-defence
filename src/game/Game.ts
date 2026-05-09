@@ -89,7 +89,8 @@ const HEALTH_POTION_HEAL_PER_SECOND = 3.5;
 const DEX_POTION_FIRE_RATE_MULTIPLIER = 1.15;
 const INT_POTION_CRITICAL_BONUS = 0.1;
 const CROSSHAIR_FIRE_BLINK_INTERVAL = 0.12;
-const INFINITE_KILL_BUFF_CHANCE = 0.1;
+const INFINITE_KILL_BUFF_CHANCE = 0.01;
+const BASE_BARRICADE_HEALTH = 1500;
 const GRENADE_SPLASH_RADIUS = 5.5;
 const GRENADE_SPLASH_DAMAGE = 315;
 const GRENADE_SPLASH_MAX_TARGETS = 10;
@@ -158,8 +159,8 @@ export class Game {
   private hudUpdateTimer = 0;
   private autoTargetLocked = false;
   private readonly barricade: BarricadeSnapshot = {
-    health: 1500,
-    maxHealth: 1500
+    health: BASE_BARRICADE_HEALTH,
+    maxHealth: BASE_BARRICADE_HEALTH
   };
   private readonly barricadeTarget = {
     get health(): number {
@@ -277,8 +278,8 @@ export class Game {
         this.preparation.resetPersonnel();
         this.openPreparation(fromRun);
       },
-      onBuyItem: (itemId: string) => {
-        this.preparation.buyItem(itemId);
+      onBuyItem: (itemId: string, count = 1) => {
+        this.preparation.buyItem(itemId, count);
         this.openPreparation(fromRun);
       },
       onResetItems: () => {
@@ -471,7 +472,27 @@ export class Game {
   }
 
   private resetBarricade(): void {
+    this.barricade.maxHealth = this.getAnaisBarricadeMaxHealth();
     this.barricade.health = this.barricade.maxHealth;
+  }
+
+  private syncBarricadeMaxHealthFromAnais(): void {
+    const previousMaxHealth = Math.max(1, this.barricade.maxHealth);
+    const healthRatio = this.barricade.health / previousMaxHealth;
+    this.barricade.maxHealth = this.getAnaisBarricadeMaxHealth();
+    this.barricade.health = Math.min(
+      this.barricade.maxHealth,
+      Math.max(0, Math.round(this.barricade.maxHealth * healthRatio))
+    );
+  }
+
+  private getAnaisBarricadeMaxHealth(): number {
+    const anais = this.preparation.snapshot().soldiers.find(soldier => soldier.id === 'anais');
+    if (!anais) return BASE_BARRICADE_HEALTH;
+    const baseStr = Math.max(1, anais.stats.str);
+    const levelMultiplier = 1 + (Math.max(1, anais.level) - 1) * 0.1;
+    const currentStr = anais.stats.str * levelMultiplier;
+    return Math.max(1, Math.round(BASE_BARRICADE_HEALTH * (currentStr / baseStr)));
   }
 
   private alignStageMapToBackground(): void {
@@ -1297,6 +1318,7 @@ export class Game {
 
   private setupCombatantsFromPreparation(): void {
     const snapshot = this.preparation.snapshot();
+    this.syncBarricadeMaxHealthFromAnais();
     const magazineCount = this.getPreparedMagazineCount(snapshot);
     this.soldierCombat.clear();
     this.activeSoldierId = null;

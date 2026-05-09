@@ -22,9 +22,11 @@ const ZOMBIE_MODEL_CHOICES_PER_WAVE = 3;
 const DEBUG_MODEL_REVIEW_COUNT = 20;
 const DEBUG_SPAWN_INTERVAL = 1;
 const DEFAULT_SPAWN_BATCH_SIZE = 2;
-const INFINITE_SPAWN_INTERVAL = 1;
+const INFINITE_SPAWN_INTERVAL = 0.35;
+const INFINITE_MIN_SPAWN_BATCH_SIZE = 6;
 const INFINITE_DIFFICULTY_INTERVAL = 60;
 const INFINITE_DIFFICULTY_MULTIPLIER = 1.2;
+const INFINITE_RESPAWN_THRESHOLD_RATIO = 0.1;
 const MAX_ACTIVE_DUMMY_ENEMIES = 140;
 const MAX_ACTIVE_GLB_ENEMIES = 60;
 
@@ -44,6 +46,10 @@ export class WaveManager {
   private mode: WaveMode = 'stage';
   private infiniteElapsed = 0;
   private infiniteModelIndex = 0;
+  private infiniteSurgeCount = 0;
+  private infiniteSurgeSize = 0;
+  private infiniteWaitingForThreshold = false;
+  private infiniteWaitingForCap = false;
   private spawnBatchSize = DEFAULT_SPAWN_BATCH_SIZE;
   private monsterType: MonsterType = 'dummy';
 
@@ -67,6 +73,10 @@ export class WaveManager {
     this.mode = 'stage';
     this.infiniteElapsed = 0;
     this.infiniteModelIndex = 0;
+    this.infiniteSurgeCount = 0;
+    this.infiniteSurgeSize = 0;
+    this.infiniteWaitingForThreshold = false;
+    this.infiniteWaitingForCap = false;
   }
 
   setDebugMode(enabled: boolean): void {
@@ -161,6 +171,10 @@ export class WaveManager {
     this.breakTimer = 0;
     this.infiniteElapsed = 0;
     this.infiniteModelIndex = 0;
+    this.infiniteSurgeCount = 0;
+    this.infiniteWaitingForThreshold = false;
+    this.infiniteWaitingForCap = false;
+    this.startNextInfiniteSurge('start');
   }
 
   getSnapshot(): WaveSnapshot {
@@ -240,34 +254,105 @@ export class WaveManager {
 
   private updateInfinite(delta: number, player: Player): void {
     this.infiniteElapsed += delta;
+
+    if (this.spawnQueue.length <= 0) {
+      const activeCount = this.enemies.getCount();
+      const threshold = this.getInfiniteRespawnThreshold();
+      if (activeCount > threshold) {
+        if (!this.infiniteWaitingForThreshold) {
+          this.logInfiniteSpawn('pause', {
+            activeCount,
+            threshold,
+            surge: this.infiniteSurgeCount
+          });
+        }
+        this.infiniteWaitingForThreshold = true;
+        this.spawnTimer = 0.25;
+        return;
+      }
+
+      this.startNextInfiniteSurge('threshold', activeCount);
+    }
+
     this.spawnTimer -= delta;
     if (this.spawnTimer > 0) return;
     if (!this.enemies.isMonsterTypeReady(this.monsterType)) {
       this.spawnTimer = 0.2;
       return;
     }
-    if (this.enemies.getCount() >= this.getActiveEnemyLimit()) {
+    const activeBefore = this.enemies.getCount();
+    const activeLimit = this.getActiveEnemyLimit();
+    if (activeBefore >= activeLimit) {
+      if (!this.infiniteWaitingForCap) {
+        this.logInfiniteSpawn('cap', {
+          activeCount: activeBefore,
+          activeLimit,
+          queued: this.spawnQueue.length,
+          surge: this.infiniteSurgeCount
+        });
+      }
+      this.infiniteWaitingForCap = true;
       this.spawnTimer = 0.25;
       return;
     }
+    this.infiniteWaitingForCap = false;
 
-    for (let i = 0; i < this.spawnBatchSize; i += 1) {
-      const request = this.createInfiniteSpawnRequest();
+    const spawnCount = Math.min(
+      this.getInfiniteSpawnBatchSize(),
+      this.spawnQueue.length,
+      activeLimit - activeBefore
+    );
+
+    for (let i = 0; i < spawnCount; i += 1) {
+      const request = this.spawnQueue.shift() ?? this.createInfiniteSpawnRequest();
       this.enemies.spawn(this.getSpawnPosition(player.position), this.getSpawnOptions(request));
       this.enemiesTotal += 1;
     }
+    this.logInfiniteSpawn('spawn', {
+      spawned: spawnCount,
+      batchSize: this.getInfiniteSpawnBatchSize(),
+      activeBefore,
+      activeAfter: activeBefore + spawnCount,
+      activeLimit,
+      queued: this.spawnQueue.length,
+      surge: this.infiniteSurgeCount
+    });
     this.spawnTimer = INFINITE_SPAWN_INTERVAL;
   }
 
-  private createInfiniteSpawnRequest(): SpawnRequest {
+  private startNextInfiniteSurge(reason: 'start' | 'threshold', activeCount = this.enemies.getCount()): void {
+    this.infiniteSurgeCount += 1;
+    this.spawnQueue = this.createFinalWaveSpawnQueue();
+    this.infiniteSurgeSize = this.spawnQueue.length;
+    this.infiniteWaitingForThreshold = false;
+    this.logInfiniteSpawn('surge', {
+      reason,
+      activeCount,
+      queued: this.spawnQueue.length,
+      threshold: this.getInfiniteRespawnThreshold(),
+      surge: this.infiniteSurgeCount
+    });
+  }
+
+  private createFinalWaveSpawnQueue(): SpawnRequest[] {
+    const finalWaveNormalCount = WAVE_NORMAL_COUNTS[DEFAULT_WAVES_PER_STAGE - 1] ?? WAVE_NORMAL_COUNTS[0];
+    return [
+      this.createInfiniteSpawnRequest('midBoss'),
+      this.createInfiniteSpawnRequest('midBoss'),
+      ...Array.from({ length: finalWaveNormalCount }).map(() => this.createInfiniteSpawnRequest('normal')),
+      this.createInfiniteSpawnRequest('bigBoss')
+    ];
+  }
+
+  private createInfiniteSpawnRequest(kind?: SpawnKind): SpawnRequest {
     const roll = Math.random();
-    const kind: SpawnKind = roll < 0.025 ? 'bigBoss' : roll < 0.115 ? 'midBoss' : 'normal';
+    const spawnKind: SpawnKind = kind ?? (roll < 0.025 ? 'bigBoss' : roll < 0.115 ? 'midBoss' : 'normal');
     const modelVariantIds = this.getMonsterModelVariantIds();
     const modelVariantId = modelVariantIds[
       this.infiniteModelIndex % Math.max(1, modelVariantIds.length)
     ];
     this.infiniteModelIndex += 1;
-    return { kind, modelVariantId };
+    return { kind: spawnKind, modelVariantId };
   }
 
   private getSpawnOptions(request: SpawnRequest): EnemySpawnOptions {
@@ -277,9 +362,10 @@ export class WaveManager {
           Math.floor(this.infiniteElapsed / INFINITE_DIFFICULTY_INTERVAL)
         )
       : 1;
+    const stageHealth = BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1);
     const baseHealth = this.mode === 'infinite'
-      ? BASE_ZOMBIE_HEALTH * infiniteScale
-      : BASE_ZOMBIE_HEALTH * Math.pow(STAGE_HEALTH_MULTIPLIER, this.stage - 1);
+      ? stageHealth * infiniteScale
+      : stageHealth;
     const bossScale: Record<SpawnKind, number> = {
       normal: 1,
       midBoss: 50,
@@ -293,7 +379,7 @@ export class WaveManager {
 
     return {
       baseHealth,
-      wave: this.waveInStage,
+      wave: this.mode === 'infinite' ? DEFAULT_WAVES_PER_STAGE : this.waveInStage,
       healthMultiplier: bossScale[request.kind],
       damageMultiplier: bossScale[request.kind] * infiniteScale,
       sizeMultiplier: sizeScale[request.kind],
@@ -335,7 +421,26 @@ export class WaveManager {
   }
 
   private getActiveEnemyLimit(): number {
+    if (this.mode === 'infinite') {
+      return Math.max(
+        this.monsterType === 'dummy' ? MAX_ACTIVE_DUMMY_ENEMIES : MAX_ACTIVE_GLB_ENEMIES,
+        this.infiniteSurgeSize + this.getInfiniteRespawnThreshold()
+      );
+    }
+
     return this.monsterType === 'dummy' ? MAX_ACTIVE_DUMMY_ENEMIES : MAX_ACTIVE_GLB_ENEMIES;
+  }
+
+  private getInfiniteRespawnThreshold(): number {
+    return Math.max(1, Math.floor(this.infiniteSurgeSize * INFINITE_RESPAWN_THRESHOLD_RATIO));
+  }
+
+  private getInfiniteSpawnBatchSize(): number {
+    return Math.max(this.spawnBatchSize, INFINITE_MIN_SPAWN_BATCH_SIZE);
+  }
+
+  private logInfiniteSpawn(event: string, details: Record<string, number | string>): void {
+    console.info('[Infinite War spawn]', event, details);
   }
 
   private getWavesPerStage(stage = this.stage): number {

@@ -246,7 +246,7 @@ export class PreparationState {
       name: 'Defense Vest',
       image: itemAssets.jacket,
       count: 0,
-      maxCount: 1,
+      maxCount: 999,
       priceGold: 4500,
       detail: 'Reduces damage.'
     },
@@ -496,7 +496,7 @@ export class PreparationState {
     this.message = `${turret.name} installed in turret slot ${emptySlot + 1}.`;
   }
 
-  buyItem(itemId: string): void {
+  buyItem(itemId: string, count = 1): void {
     const item = this.items.find(candidate => candidate.id === itemId);
     if (!item) return;
     const maxCount = this.maxItemCount(item);
@@ -504,14 +504,20 @@ export class PreparationState {
       this.message = `${item.name} is already at max stock.`;
       return;
     }
-    if (this.gold < item.priceGold) {
+    const requestedCount = Math.max(1, Math.floor(count));
+    const affordableCount = Math.floor(this.gold / item.priceGold);
+    const purchaseCount = Math.min(requestedCount, maxCount - item.count, affordableCount);
+    if (purchaseCount <= 0) {
       this.message = `Need ${item.priceGold - this.gold} more gold for ${item.name}.`;
       return;
     }
-    this.gold -= item.priceGold;
-    this.itemGoldSpent += item.priceGold;
-    item.count = Math.min(maxCount, item.count + 1);
-    this.message = `${item.name} purchased.`;
+    const cost = item.priceGold * purchaseCount;
+    this.gold -= cost;
+    this.itemGoldSpent += cost;
+    item.count = Math.min(maxCount, item.count + purchaseCount);
+    this.message = purchaseCount === 1
+      ? `${item.name} purchased.`
+      : `${item.name} x${purchaseCount} purchased.`;
   }
 
   resetItems(): void {

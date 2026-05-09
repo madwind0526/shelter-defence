@@ -167,22 +167,6 @@ export const enemyModelAssets = {
       groundOffset: -0.4
     },
     {
-      id: 'chicken-mech',
-      url: new URL('../../assets/models/mech/chicken_6_-_mech.glb', import.meta.url).href,
-      targetMaxDimension: 10,
-      hitboxHeightMultiplier: 0.32,
-      hitboxWidthMultiplier: 0.35,
-      overheadHeightMultiplier: 0.42,
-      groundOffset: 0.08,
-      visualGroundOffset: -0.4
-    },
-    {
-      id: 'medium-mech-striker',
-      url: new URL('../../assets/models/mech/medium_mech_striker.glb', import.meta.url).href,
-      targetMaxDimension: 5,
-      groundOffset: -0.4
-    },
-    {
       id: 'mech-drone',
       url: new URL('../../assets/models/mech/mech_drone.glb', import.meta.url).href,
       targetMaxDimension: 1,
@@ -198,12 +182,6 @@ export const enemyModelAssets = {
       targetMaxDimension: 5,
       hitboxHeightMultiplier: 1.5,
       overheadHeightMultiplier: 1.5,
-      groundOffset: -0.4
-    },
-    {
-      id: 'sonia-mech',
-      url: new URL('../../assets/models/mech/sonia_mech.glb', import.meta.url).href,
-      targetMaxDimension: 5,
       groundOffset: -0.4
     },
     {
@@ -224,14 +202,6 @@ export const enemyModelAssets = {
       targetMaxDimension: 5,
       groundOffset: -0.4
     },
-    {
-      id: 'walker-mech',
-      url: new URL('../../assets/models/mech/walker_mech.glb', import.meta.url).href,
-      targetMaxDimension: 1 / 15,
-      hitboxHeightMultiplier: 10,
-      hitboxWidthMultiplier: 10,
-      groundOffset: -0.4
-    }
   ]
 };
 
