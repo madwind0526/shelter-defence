@@ -947,7 +947,6 @@ export class Hud {
             <span>Monster Type</span>
             <select class="setting-input" data-setting="monsterType">
               ${this.renderMonsterTypeOption('dummy', 'Dummy', settings.monsterType)}
-              ${this.renderMonsterTypeOption('mech', 'Mech', settings.monsterType)}
               ${this.renderMonsterTypeOption('zombie', 'Zombie', settings.monsterType)}
             </select>
           </label>

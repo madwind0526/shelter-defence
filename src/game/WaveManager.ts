@@ -415,9 +415,7 @@ export class WaveManager {
   private getMonsterModelVariantIds(): string[] {
     if (this.monsterType === 'dummy') return [];
 
-    return this.monsterType === 'mech'
-      ? enemyModelAssets.mechs.map((asset) => asset.id)
-      : enemyModelAssets.zombies.map((asset) => asset.id);
+    return enemyModelAssets.zombies.map((asset) => asset.id);
   }
 
   private getActiveEnemyLimit(): number {

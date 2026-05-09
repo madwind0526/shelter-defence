@@ -151,58 +151,7 @@ export const enemyModelAssets = {
       visualGroundOffset: -3.1
     }
   ],
-  // Mech review sizing is tuned per model after Debug Mode checks.
-  mechs: [
-    {
-      id: 'astro-scout-toilet',
-      url: new URL('../../assets/models/mech/astro_scout_toilet.glb', import.meta.url).href,
-      targetMaxDimension: 5,
-      groundOffset: -0.4
-    },
-    {
-      id: 'camera-mech',
-      url: new URL('../../assets/models/mech/camera_mech.glb', import.meta.url).href,
-      targetMaxDimension: 5,
-      visualYawOffset: Math.PI / 2,
-      groundOffset: -0.4
-    },
-    {
-      id: 'mech-drone',
-      url: new URL('../../assets/models/mech/mech_drone.glb', import.meta.url).href,
-      targetMaxDimension: 1,
-      hitboxHeightMultiplier: 3,
-      hitboxWidthMultiplier: 4,
-      overheadHeightMultiplier: 3,
-      groundOffset: -0.4,
-      visualGroundOffset: -2.0
-    },
-    {
-      id: 'primeops-mech',
-      url: new URL('../../assets/models/mech/primeops_mech.glb', import.meta.url).href,
-      targetMaxDimension: 5,
-      hitboxHeightMultiplier: 1.5,
-      overheadHeightMultiplier: 1.5,
-      groundOffset: -0.4
-    },
-    {
-      id: 'titan-speakerman',
-      url: new URL('../../assets/models/mech/titan_speakerman.glb', import.meta.url).href,
-      targetMaxDimension: 5,
-      groundOffset: -0.4
-    },
-    {
-      id: 'upgraded-camera-mech',
-      url: new URL('../../assets/models/mech/upgraded_camera_mech.glb', import.meta.url).href,
-      targetMaxDimension: 5,
-      groundOffset: -0.4
-    },
-    {
-      id: 'upgraded-titan-camera-man',
-      url: new URL('../../assets/models/mech/upgraded_titan_camera_man.glb', import.meta.url).href,
-      targetMaxDimension: 5,
-      groundOffset: -0.4
-    },
-  ]
+  mechs: []
 };
 
 export const preparationUiAssets = {

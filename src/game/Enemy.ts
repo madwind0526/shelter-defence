@@ -250,15 +250,6 @@ export class EnemyManager {
       failed: false,
       visualTargetMaxDimension: asset.targetMaxDimension ?? this.zombieModelTargetMaxDimension,
       debugName: `${index + 1}. ${asset.id}`
-    })),
-    ...enemyModelAssets.mechs.map((asset, index) => ({
-      ...asset,
-      monsterType: 'mech' as const,
-      template: null,
-      animations: [],
-      failed: false,
-      visualTargetMaxDimension: asset.targetMaxDimension ?? 3.5,
-      debugName: `M${index + 1}. ${asset.id}`
     }))
   ];
   private zombieMaterialMode: ZombieMaterialMode = 'plain-metal';

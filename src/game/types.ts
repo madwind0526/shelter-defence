@@ -8,7 +8,7 @@ export type ZombieMaterialMode =
   | 'mesh-toon'
   | 'mesh-lambert';
 
-export type MonsterType = 'dummy' | 'zombie' | 'mech';
+export type MonsterType = 'dummy' | 'zombie';
 
 export interface GameSettings {
   zombieMaterialMode: ZombieMaterialMode;
